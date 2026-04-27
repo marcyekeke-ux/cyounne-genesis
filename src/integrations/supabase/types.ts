@@ -14,16 +14,402 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      alerts: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          level: Database["public"]["Enums"]["alert_level"]
+          member_id: string | null
+          resolved: boolean
+          source: string | null
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          level: Database["public"]["Enums"]["alert_level"]
+          member_id?: string | null
+          resolved?: boolean
+          source?: string | null
+          title: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          level?: Database["public"]["Enums"]["alert_level"]
+          member_id?: string | null
+          resolved?: boolean
+          source?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alerts_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_keys: {
+        Row: {
+          api_key: string | null
+          enabled: boolean
+          extra_config: Json | null
+          id: string
+          service: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          api_key?: string | null
+          enabled?: boolean
+          extra_config?: Json | null
+          id?: string
+          service: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          api_key?: string | null
+          enabled?: boolean
+          extra_config?: Json | null
+          id?: string
+          service?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      audit_log: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          id: string
+          target: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          target?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          target?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      conversations: {
+        Row: {
+          created_at: string
+          id: string
+          mode: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mode?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mode?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      knowledge: {
+        Row: {
+          category: string
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          tags: string[] | null
+          title: string
+          updated_at: string
+          validated: boolean
+        }
+        Insert: {
+          category: string
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          tags?: string[] | null
+          title: string
+          updated_at?: string
+          validated?: boolean
+        }
+        Update: {
+          category?: string
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          tags?: string[] | null
+          title?: string
+          updated_at?: string
+          validated?: boolean
+        }
+        Relationships: []
+      }
+      media_assets: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          label: string
+          metadata: Json | null
+          mime_type: string | null
+          uploaded_by: string | null
+          url: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          label: string
+          metadata?: Json | null
+          mime_type?: string | null
+          uploaded_by?: string | null
+          url: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          label?: string
+          metadata?: Json | null
+          mime_type?: string | null
+          uploaded_by?: string | null
+          url?: string
+        }
+        Relationships: []
+      }
+      members: {
+        Row: {
+          avatar_url: string | null
+          birthday: string | null
+          creances: number
+          cumul: number
+          email: string | null
+          full_name: string
+          gages: number
+          id: string
+          joined_at: string
+          level: Database["public"]["Enums"]["app_role"]
+          metadata: Json | null
+          pax_id: string
+          phone: string | null
+          qr_code: string | null
+          status: Database["public"]["Enums"]["member_status"]
+          team_leader: string | null
+          trust_score: number
+          user_id: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          birthday?: string | null
+          creances?: number
+          cumul?: number
+          email?: string | null
+          full_name: string
+          gages?: number
+          id?: string
+          joined_at?: string
+          level?: Database["public"]["Enums"]["app_role"]
+          metadata?: Json | null
+          pax_id: string
+          phone?: string | null
+          qr_code?: string | null
+          status?: Database["public"]["Enums"]["member_status"]
+          team_leader?: string | null
+          trust_score?: number
+          user_id?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          birthday?: string | null
+          creances?: number
+          cumul?: number
+          email?: string | null
+          full_name?: string
+          gages?: number
+          id?: string
+          joined_at?: string
+          level?: Database["public"]["Enums"]["app_role"]
+          metadata?: Json | null
+          pax_id?: string
+          phone?: string | null
+          qr_code?: string | null
+          status?: Database["public"]["Enums"]["member_status"]
+          team_leader?: string | null
+          trust_score?: number
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          provider: string | null
+          role: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          provider?: string | null
+          role: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          provider?: string | null
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          gender: string | null
+          id: string
+          updated_at: string
+          voice_signature: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          gender?: string | null
+          id: string
+          updated_at?: string
+          voice_signature?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          gender?: string | null
+          id?: string
+          updated_at?: string
+          voice_signature?: string | null
+        }
+        Relationships: []
+      }
+      reports: {
+        Row: {
+          content: Json
+          created_at: string
+          generated_by: string | null
+          id: string
+          pdf_url: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          content: Json
+          created_at?: string
+          generated_by?: string | null
+          id?: string
+          pdf_url?: string | null
+          title: string
+          type: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          generated_by?: string | null
+          id?: string
+          pdf_url?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      alert_level: "leger" | "moyen" | "grave"
+      app_role: "admin" | "pax" | "mega_pax" | "super_pax" | "roi" | "reine"
+      member_status: "actif" | "bloque" | "suspendu"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +536,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      alert_level: ["leger", "moyen", "grave"],
+      app_role: ["admin", "pax", "mega_pax", "super_pax", "roi", "reine"],
+      member_status: ["actif", "bloque", "suspendu"],
+    },
   },
 } as const
