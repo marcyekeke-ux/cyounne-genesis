@@ -5,6 +5,16 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import Auth from "./pages/Auth.tsx";
+import Chat from "./pages/Chat.tsx";
+import AdminDashboard from "./pages/admin/AdminDashboard.tsx";
+import AdminApiKeys from "./pages/admin/AdminApiKeys.tsx";
+import AdminKnowledge from "./pages/admin/AdminKnowledge.tsx";
+import AdminMedia from "./pages/admin/AdminMedia.tsx";
+import AdminMembers from "./pages/admin/AdminMembers.tsx";
+import AdminAlerts from "./pages/admin/AdminAlerts.tsx";
+import AdminReports from "./pages/admin/AdminReports.tsx";
+import { ProtectedRoute } from "./components/cyounne/ProtectedRoute.tsx";
 
 const queryClient = new QueryClient();
 
@@ -16,7 +26,16 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+          <Route path="/admin/api-keys" element={<ProtectedRoute adminOnly><AdminApiKeys /></ProtectedRoute>} />
+          <Route path="/admin/knowledge" element={<ProtectedRoute adminOnly><AdminKnowledge /></ProtectedRoute>} />
+          <Route path="/admin/media" element={<ProtectedRoute adminOnly><AdminMedia /></ProtectedRoute>} />
+          <Route path="/admin/members" element={<ProtectedRoute adminOnly><AdminMembers /></ProtectedRoute>} />
+          <Route path="/admin/alerts" element={<ProtectedRoute adminOnly><AdminAlerts /></ProtectedRoute>} />
+          <Route path="/admin/reports" element={<ProtectedRoute adminOnly><AdminReports /></ProtectedRoute>} />
+          {/* catch-all */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
