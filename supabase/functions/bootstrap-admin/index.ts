@@ -1,6 +1,9 @@
 // Promote a user to admin using the secret password ADMIN_SECRET_PASSWORD.
 // Used once by Mr EKEKE after first signup.
-import { corsHeaders } from "@supabase/supabase-js/cors";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 Deno.serve(async (req) => {
