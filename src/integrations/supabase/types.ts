@@ -342,6 +342,33 @@ export type Database = {
         }
         Relationships: []
       }
+      push_subscriptions: {
+        Row: {
+          created_at: string
+          id: string
+          label: string | null
+          metadata: Json | null
+          player_id: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          metadata?: Json | null
+          player_id: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          metadata?: Json | null
+          player_id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       reports: {
         Row: {
           content: Json
@@ -390,6 +417,45 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      whatsapp_messages: {
+        Row: {
+          body: string | null
+          created_at: string
+          cyounne_reply: string | null
+          direction: string
+          from_number: string
+          id: string
+          metadata: Json | null
+          status: string | null
+          to_number: string | null
+          wa_message_id: string | null
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          cyounne_reply?: string | null
+          direction: string
+          from_number: string
+          id?: string
+          metadata?: Json | null
+          status?: string | null
+          to_number?: string | null
+          wa_message_id?: string | null
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          cyounne_reply?: string | null
+          direction?: string
+          from_number?: string
+          id?: string
+          metadata?: Json | null
+          status?: string | null
+          to_number?: string | null
+          wa_message_id?: string | null
         }
         Relationships: []
       }

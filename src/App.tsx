@@ -14,6 +14,7 @@ import AdminMedia from "./pages/admin/AdminMedia.tsx";
 import AdminMembers from "./pages/admin/AdminMembers.tsx";
 import AdminAlerts from "./pages/admin/AdminAlerts.tsx";
 import AdminReports from "./pages/admin/AdminReports.tsx";
+import AdminWhatsApp from "./pages/admin/AdminWhatsApp.tsx";
 import { ProtectedRoute } from "./components/cyounne/ProtectedRoute.tsx";
 
 const queryClient = new QueryClient();
@@ -27,6 +28,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
+          {/* Cyounne accessible sans compte (Genesis gère l'auth en amont) */}
           <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
           <Route path="/admin/api-keys" element={<ProtectedRoute adminOnly><AdminApiKeys /></ProtectedRoute>} />
@@ -34,6 +36,7 @@ const App = () => (
           <Route path="/admin/media" element={<ProtectedRoute adminOnly><AdminMedia /></ProtectedRoute>} />
           <Route path="/admin/members" element={<ProtectedRoute adminOnly><AdminMembers /></ProtectedRoute>} />
           <Route path="/admin/alerts" element={<ProtectedRoute adminOnly><AdminAlerts /></ProtectedRoute>} />
+          <Route path="/admin/whatsapp" element={<ProtectedRoute adminOnly><AdminWhatsApp /></ProtectedRoute>} />
           <Route path="/admin/reports" element={<ProtectedRoute adminOnly><AdminReports /></ProtectedRoute>} />
           {/* catch-all */}
           <Route path="*" element={<NotFound />} />

@@ -1,1 +1,7 @@
 project_id = "zlhjjauyjfbsmxhsdsiv"
+
+[functions.whatsapp-webhook]
+verify_jwt = false
+
+[functions.bootstrap-admin]
+verify_jwt = false

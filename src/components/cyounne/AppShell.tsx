@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Brain, Shield, Image as ImageIcon, Users, Bell, FileText, KeyRound, BookOpen, MessageSquare, LogOut } from "lucide-react";
+import { Brain, Shield, Image as ImageIcon, Users, Bell, FileText, KeyRound, BookOpen, MessageSquare, LogOut, LogIn, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -14,13 +14,14 @@ const adminNav = [
   { to: "/admin/knowledge", label: "Connaissances", icon: BookOpen },
   { to: "/admin/media", label: "Médias", icon: ImageIcon },
   { to: "/admin/members", label: "Membres", icon: Users },
-  { to: "/admin/alerts", label: "Alertes", icon: Bell },
+  { to: "/admin/alerts", label: "Alertes & Push", icon: Bell },
+  { to: "/admin/whatsapp", label: "WhatsApp 24/7", icon: MessageCircle },
   { to: "/admin/reports", label: "Rapports", icon: FileText },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const loc = useLocation();
-  const { isAdmin, profile, signOut } = useAuth();
+  const { user, isAdmin, profile, signOut } = useAuth();
 
   const items = [...userNav, ...(isAdmin ? adminNav : [])];
 
@@ -59,22 +60,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+          {!isAdmin && (
+            <Link
+              to="/admin"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs text-muted-foreground/60 hover:text-foreground hover:bg-secondary/60"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>Mode admin</span>
+            </Link>
+          )}
         </nav>
         <div className="p-3 border-t border-border/60">
-          <div className="flex items-center gap-3 px-2 py-2">
-            <div className="w-8 h-8 rounded-full bg-secondary overflow-hidden">
-              {profile?.avatar_url && <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm truncate">{profile?.display_name ?? "—"}</div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                {isAdmin ? "Admin" : "Pax"}
+          {user ? (
+            <div className="flex items-center gap-3 px-2 py-2">
+              <div className="w-8 h-8 rounded-full bg-secondary overflow-hidden">
+                {profile?.avatar_url && <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />}
               </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm truncate">{profile?.display_name ?? "—"}</div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {isAdmin ? "Admin" : "Pax"}
+                </div>
+              </div>
+              <Button size="icon" variant="ghost" onClick={signOut} title="Déconnexion">
+                <LogOut className="w-4 h-4" />
+              </Button>
             </div>
-            <Button size="icon" variant="ghost" onClick={signOut} title="Déconnexion">
-              <LogOut className="w-4 h-4" />
-            </Button>
-          </div>
+          ) : (
+            <div className="px-2 py-2 space-y-1">
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Mode invité</div>
+              <Link to="/auth" className="text-xs flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
+                <LogIn className="w-3 h-3" /> Se connecter (optionnel)
+              </Link>
+            </div>
+          )}
         </div>
       </aside>
 

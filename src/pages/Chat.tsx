@@ -50,7 +50,7 @@ export default function Chat() {
     },
   });
 
-  // Initialize conversation
+  // Initialize conversation (uniquement pour utilisateurs connectés ; les invités ont une session locale)
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -98,7 +98,7 @@ export default function Chat() {
   }
 
   async function sendMessage(text: string) {
-    if (!text.trim() || !user) return;
+    if (!text.trim()) return;
     const userMsg: Msg = { id: crypto.randomUUID(), role: "user", content: text };
     setMessages((p) => [...p, userMsg]);
     setInput("");
@@ -141,6 +141,8 @@ export default function Chat() {
     setAvatarState("speaking");
     try {
       const buf = await file.arrayBuffer();
+      void user; // mode invité accepté
+
       const bytes = new Uint8Array(buf);
       let bin = "";
       for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
