@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Brain, Users, Bell, FileText, Activity, Shield, KeyRound, BookOpen } from "lucide-react";
+import { Brain, Users, Bell, FileText, Activity, Shield, KeyRound, BookOpen, Lock, LogOut } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -9,10 +9,10 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
 export default function AdminDashboard() {
-  const { isAdmin, user, reload } = useAuth();
+  const { isAdmin, unlockAdmin, lockAdmin } = useAuth();
   const [stats, setStats] = useState({ members: 0, alerts: 0, reports: 0, conversations: 0, knowledge: 0, media: 0 });
-  const [bootstrapPwd, setBootstrapPwd] = useState("");
-  const [bootstrapBusy, setBootstrapBusy] = useState(false);
+  const [pwd, setPwd] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -36,20 +36,17 @@ export default function AdminDashboard() {
     })();
   }, [isAdmin]);
 
-  const promote = async () => {
-    if (!user) { toast.error("Connectez-vous d'abord"); return; }
-    setBootstrapBusy(true);
+  const unlock = async () => {
+    if (!pwd) return;
+    setBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke("bootstrap-admin", { body: { password: bootstrapPwd } });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      toast.success((data as any)?.message ?? "Admin OK");
-      setBootstrapPwd("");
-      await reload();
+      await unlockAdmin(pwd);
+      toast.success("Accord Mr EKEKE. Accès admin déverrouillé.");
+      setPwd("");
     } catch (e: any) {
-      toast.error(e?.message ?? "Erreur");
+      toast.error(e?.message ?? "Mot de passe incorrect");
     } finally {
-      setBootstrapBusy(false);
+      setBusy(false);
     }
   };
 
@@ -57,23 +54,29 @@ export default function AdminDashboard() {
     return (
       <div className="p-6 md:p-10 max-w-xl mx-auto">
         <Card className="glass p-8">
-          <div className="flex items-center gap-3 mb-2"><Shield className="w-6 h-6 text-accent" /> <h1 className="font-display text-2xl font-bold">Devenir Administrateur</h1></div>
-          {!user ? (
-            <>
-              <p className="text-sm text-muted-foreground mb-4">Connectez-vous d'abord pour activer le mode administrateur (Mr EKEKE).</p>
-              <Link to="/auth"><Button className="bg-gradient-primary">Se connecter</Button></Link>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-muted-foreground mb-4">Saisissez le mot de passe administrateur secret.</p>
-              <div className="flex gap-2">
-                <Input type="password" value={bootstrapPwd} onChange={(e) => setBootstrapPwd(e.target.value)} placeholder="Mot de passe secret" />
-                <Button onClick={promote} disabled={!bootstrapPwd || bootstrapBusy} className="bg-gradient-primary">
-                  Activer
-                </Button>
-              </div>
-            </>
-          )}
+          <div className="flex items-center gap-3 mb-2">
+            <Lock className="w-6 h-6 text-accent" />
+            <h1 className="font-display text-2xl font-bold">Accès Administrateur</h1>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            Saisissez le mot de passe secret de Mr EKEKE pour accéder au panneau Cyounne.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              type="password"
+              autoFocus
+              value={pwd}
+              onChange={(e) => setPwd(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && unlock()}
+              placeholder="Mot de passe secret"
+            />
+            <Button onClick={unlock} disabled={!pwd || busy} className="bg-gradient-primary">
+              Entrer
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-4">
+            L'authentification générale s'effectue depuis EMR Genesis. Cyounne ne gère pas de comptes.
+          </p>
         </Card>
       </div>
     );
@@ -90,12 +93,18 @@ export default function AdminDashboard() {
 
   return (
     <div className="p-6 md:p-10 space-y-8">
-      <header>
-        <div className="flex items-center gap-3">
-          <Brain className="w-7 h-7 text-accent" />
-          <h1 className="font-display text-3xl font-black text-gradient">Vision Totale</h1>
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <Brain className="w-7 h-7 text-accent" />
+            <h1 className="font-display text-3xl font-black text-gradient">Vision Totale</h1>
+            <Shield className="w-4 h-4 text-accent ml-2" />
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">État global de EMR Genesis · données réelles uniquement</p>
         </div>
-        <p className="text-sm text-muted-foreground mt-1">État global de EMR Genesis · données réelles uniquement</p>
+        <Button variant="outline" size="sm" onClick={lockAdmin}>
+          <LogOut className="w-4 h-4 mr-1" /> Verrouiller
+        </Button>
       </header>
 
       <section className="grid grid-cols-2 md:grid-cols-3 gap-4">

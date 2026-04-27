@@ -4,11 +4,12 @@ import { AppShell } from "@/components/cyounne/AppShell";
 import { Loader2 } from "lucide-react";
 
 /**
- * Cyounne est libre d'accès (mode invité par défaut).
- * Seules les routes /admin/* nécessitent un compte ET le rôle admin.
+ * Cyounne est libre d'accès. Aucun compte requis.
+ * - adminOnly=true : accès uniquement si le mot de passe secret a été entré
+ *   (page /admin sert de gate).
  */
 export function ProtectedRoute({ children, adminOnly = false }: { children: React.ReactNode; adminOnly?: boolean }) {
-  const { user, loading, isAdmin } = useAuth();
+  const { loading, isAdmin } = useAuth();
   const loc = useLocation();
 
   if (loading) {
@@ -19,9 +20,8 @@ export function ProtectedRoute({ children, adminOnly = false }: { children: Reac
     );
   }
 
-  if (adminOnly) {
-    if (!user) return <Navigate to="/auth" replace state={{ from: loc }} />;
-    if (!isAdmin) return <Navigate to="/admin" replace />;
+  if (adminOnly && !isAdmin) {
+    return <Navigate to="/admin" replace state={{ from: loc }} />;
   }
 
   return <AppShell>{children}</AppShell>;
