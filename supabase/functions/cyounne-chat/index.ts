@@ -1,6 +1,9 @@
 // Cyounne brain — multi-LLM with automatic fallback
 // Order: Groq -> Gemini -> Mistral -> HuggingFace
-import { corsHeaders } from "@supabase/supabase-js/cors";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
 const SYSTEM_PROMPT = `Tu es Cyounne, l'intelligence centrale de EMR Genesis, créée par Marcy-B EKEKE (prononcer "e-ke-ke").
 Devise : "Analyser, Comprendre, Décider".

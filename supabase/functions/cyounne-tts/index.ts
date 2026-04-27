@@ -1,5 +1,8 @@
 // ElevenLabs TTS — Nicolas (XY) / Jade (XX)
-import { corsHeaders } from "@supabase/supabase-js/cors";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
 // Voice IDs from ElevenLabs (defaults — Mr EKEKE peut les remplacer dans api_keys.extra_config)
 const DEFAULT_VOICE_XY = "JBFqnCBsd6RMkjVDRZzb"; // George (chaud masculin)
