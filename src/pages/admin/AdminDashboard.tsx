@@ -58,13 +58,22 @@ export default function AdminDashboard() {
       <div className="p-6 md:p-10 max-w-xl mx-auto">
         <Card className="glass p-8">
           <div className="flex items-center gap-3 mb-2"><Shield className="w-6 h-6 text-accent" /> <h1 className="font-display text-2xl font-bold">Devenir Administrateur</h1></div>
-          <p className="text-sm text-muted-foreground mb-4">Saisissez le mot de passe administrateur secret.</p>
-          <div className="flex gap-2">
-            <Input type="password" value={bootstrapPwd} onChange={(e) => setBootstrapPwd(e.target.value)} placeholder="Mot de passe secret" />
-            <Button onClick={promote} disabled={!bootstrapPwd || bootstrapBusy} className="bg-gradient-primary">
-              Activer
-            </Button>
-          </div>
+          {!user ? (
+            <>
+              <p className="text-sm text-muted-foreground mb-4">Connectez-vous d'abord pour activer le mode administrateur (Mr EKEKE).</p>
+              <Link to="/auth"><Button className="bg-gradient-primary">Se connecter</Button></Link>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground mb-4">Saisissez le mot de passe administrateur secret.</p>
+              <div className="flex gap-2">
+                <Input type="password" value={bootstrapPwd} onChange={(e) => setBootstrapPwd(e.target.value)} placeholder="Mot de passe secret" />
+                <Button onClick={promote} disabled={!bootstrapPwd || bootstrapBusy} className="bg-gradient-primary">
+                  Activer
+                </Button>
+              </div>
+            </>
+          )}
         </Card>
       </div>
     );
