@@ -97,6 +97,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 min-w-0">
         {children}
       </main>
+
+      <AdminQuickUnlock />
     </div>
   );
 }
