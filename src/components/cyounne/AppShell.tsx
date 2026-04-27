@@ -3,6 +3,7 @@ import { Brain, Shield, Image as ImageIcon, Users, Bell, FileText, KeyRound, Boo
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { AdminQuickUnlock } from "@/components/cyounne/AdminQuickUnlock";
 
 const userNav = [
   { to: "/chat", label: "Chat", icon: MessageSquare },
@@ -96,6 +97,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 min-w-0">
         {children}
       </main>
+
+      <AdminQuickUnlock />
     </div>
   );
 }
