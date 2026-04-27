@@ -3,6 +3,7 @@ import { Brain, Shield, Image as ImageIcon, Users, Bell, FileText, KeyRound, Boo
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { AdminQuickUnlock } from "@/components/cyounne/AdminQuickUnlock";
 
 const userNav = [
   { to: "/chat", label: "Chat", icon: MessageSquare },
