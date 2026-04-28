@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     const finalPrompt = prompt ?? `Tu es Cyounne de EMR Genesis. Analyse ce document (${fileName ?? "document"}) en français. Donne un résumé clair, les points clés, les chiffres importants, et toute anomalie. Texte naturel uniquement, pas de markdown, pas d'astérisques.`;
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
