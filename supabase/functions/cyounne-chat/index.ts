@@ -41,6 +41,24 @@ const PROVIDERS = [
   { name: "mistral", url: "https://api.mistral.ai/v1/chat/completions", model: "mistral-small-latest", keyEnv: "MISTRAL_API_KEY" },
 ];
 
+function stripMarkdown(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\bMr\.?\s*EKEKE\b/gi, "Monsieur ÉKÉKÉ")
+    .replace(/\bMister\s+EKEKE\b/gi, "Monsieur ÉKÉKÉ")
+    .replace(/\bM\.\s*EKEKE\b/gi, "Monsieur ÉKÉKÉ")
+    .replace(/\bMarcy-B\s+EKEKE\b/gi, "Monsieur ÉKÉKÉ");
+}
+
 async function callProvider(p: typeof PROVIDERS[number], messages: any[], signal: AbortSignal) {
   const key = Deno.env.get(p.keyEnv);
   if (!key) throw new Error(`${p.name} key missing`);
@@ -52,7 +70,7 @@ async function callProvider(p: typeof PROVIDERS[number], messages: any[], signal
   });
   if (!res.ok) throw new Error(`${p.name} ${res.status}`);
   const data = await res.json();
-  return { content: data.choices?.[0]?.message?.content ?? "", provider: p.name };
+  return { content: stripMarkdown(data.choices?.[0]?.message?.content ?? ""), provider: p.name };
 }
 
 async function callHuggingFace(messages: any[]) {
