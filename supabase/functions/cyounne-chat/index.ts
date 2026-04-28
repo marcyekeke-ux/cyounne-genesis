@@ -85,7 +85,7 @@ async function callHuggingFace(messages: any[]) {
   if (!res.ok) throw new Error(`hf ${res.status}`);
   const data = await res.json();
   const text = Array.isArray(data) ? data[0]?.generated_text ?? "" : data.generated_text ?? "";
-  return { content: text.split("Cyounne:").pop()?.trim() ?? text, provider: "huggingface" };
+  return { content: stripMarkdown(text.split("Cyounne:").pop()?.trim() ?? text), provider: "huggingface" };
 }
 
 async function callWithTimeout(fn: () => Promise<any>, ms = 3000) {
@@ -104,8 +104,8 @@ Deno.serve(async (req) => {
   try {
     const { messages, isAdmin = false, gender = "unknown" } = await req.json();
     const personalityHint = isAdmin
-      ? "[CONTEXTE: tu parles à Mr EKEKE, ton créateur. Style JARVIS, commence souvent par 'Oui Mr EKEKE'.]"
-      : `[CONTEXTE: utilisateur ${gender === "XY" ? "homme — style direct doux" : gender === "XX" ? "femme — style chaleureux expressif" : "inconnu — style neutre"}]`;
+      ? "[CONTEXTE: tu parles à Monsieur ÉKÉKÉ, ton créateur. Style JARVIS, commence souvent par 'Oui Monsieur ÉKÉKÉ' ou 'Accord Monsieur ÉKÉKÉ'. Texte naturel uniquement, pas de markdown.]"
+      : `[CONTEXTE: utilisateur ${gender === "XY" ? "homme — style direct doux" : gender === "XX" ? "femme — style chaleureux expressif" : "inconnu — style neutre"}. Texte naturel uniquement, pas de markdown.]`;
 
     const fullMessages = [
       { role: "system", content: SYSTEM_PROMPT + "\n" + personalityHint },
