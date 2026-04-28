@@ -37,7 +37,15 @@ Deno.serve(async (req) => {
     }
 
     const data = await res.json();
-    const analysis = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "Analyse impossible, données insuffisantes";
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "Analyse impossible, données insuffisantes";
+    const analysis = raw
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/\*([^*]+)\*/g, "$1")
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/^\s*[-*+]\s+/gm, "")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/\bMr\.?\s*EKEKE\b/gi, "Monsieur ÉKÉKÉ")
+      .replace(/\bMarcy-B\s+EKEKE\b/gi, "Monsieur ÉKÉKÉ");
     return new Response(JSON.stringify({ analysis }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
