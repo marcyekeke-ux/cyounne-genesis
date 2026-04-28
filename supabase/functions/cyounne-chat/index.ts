@@ -37,7 +37,7 @@ Niveaux : PAX, MEGA PAX, SUPER PAX, Roi, Reine.`;
 
 const PROVIDERS = [
   { name: "groq", url: "https://api.groq.com/openai/v1/chat/completions", model: "llama-3.3-70b-versatile", keyEnv: "GROQ_API_KEY" },
-  { name: "gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", model: "gemini-1.5-flash", keyEnv: "GEMINI_API_KEY" },
+  { name: "gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", model: "gemini-2.0-flash", keyEnv: "GEMINI_API_KEY" },
   { name: "mistral", url: "https://api.mistral.ai/v1/chat/completions", model: "mistral-small-latest", keyEnv: "MISTRAL_API_KEY" },
 ];
 
