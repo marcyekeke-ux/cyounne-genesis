@@ -25,15 +25,24 @@ export default function AdminMedia() {
     if (!label) { toast.error("Donnez un label avant d'uploader"); return; }
     setBusy(true);
     try {
-      const path = `${category}/${Date.now()}-${file.name}`;
+      // 1) Upload dans le storage Supabase (bucket media)
+      const path = `${category}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
       const { error: upErr } = await supabase.storage.from("media").upload(path, file, { upsert: false });
-      if (upErr) throw upErr;
+      if (upErr) throw new Error(`Storage : ${upErr.message}`);
       const { data: { publicUrl } } = supabase.storage.from("media").getPublicUrl(path);
+
+      // 2) Référencer dans media_assets
+      const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase.from("media_assets").insert({
-        category, label, url: publicUrl, mime_type: file.type, metadata: { size: file.size, name: file.name },
+        category,
+        label,
+        url: publicUrl,
+        mime_type: file.type,
+        metadata: { size: file.size, name: file.name, path, cloudinary_cloud: "drctjhwvh" },
+        uploaded_by: user?.id ?? null,
       });
-      if (error) throw error;
-      toast.success("Média ajouté");
+      if (error) throw new Error(`DB : ${error.message}`);
+      toast.success("Média ajouté. Cyounne le reconnaît.");
       setLabel("");
       load();
     } catch (e: any) {
