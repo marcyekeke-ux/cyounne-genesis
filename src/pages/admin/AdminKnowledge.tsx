@@ -19,15 +19,17 @@ export default function AdminKnowledge() {
 
   const add = async () => {
     if (!form.title || !form.content || !form.category) { toast.error("Catégorie, titre et contenu requis"); return; }
+    const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase.from("knowledge").insert({
       category: form.category,
       title: form.title,
       content: form.content,
       tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
       validated: false,
+      created_by: user?.id ?? null,
     });
-    if (error) toast.error(error.message);
-    else { toast.success("Connaissance ajoutée"); setForm({ category: "", title: "", content: "", tags: "" }); load(); }
+    if (error) toast.error(`Ajout impossible : ${error.message}`);
+    else { toast.success("Connaissance ajoutée. Cyounne apprend."); setForm({ category: "", title: "", content: "", tags: "" }); load(); }
   };
 
   const validate = async (id: string) => {
