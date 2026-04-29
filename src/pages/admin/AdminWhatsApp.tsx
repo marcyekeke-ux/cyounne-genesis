@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeCyounneAdmin } from "@/lib/cyounneAdmin";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -18,14 +19,17 @@ export default function AdminWhatsApp() {
   const webhookUrl = `https://${projectId}.functions.supabase.co/whatsapp-webhook`;
 
   const load = async () => {
-    const [{ data: wRow }, { data: aRow }, { data: msgs }] = await Promise.all([
-      supabase.from("api_keys").select("*").eq("service", "whatsapp_business").maybeSingle(),
-      supabase.from("api_keys").select("*").eq("service", "activepieces").maybeSingle(),
-      supabase.from("whatsapp_messages").select("*").order("created_at", { ascending: false }).limit(50),
-    ]);
-    if (wRow) setWa({ ...wRow, extra_config: wRow.extra_config ?? {} });
-    if (aRow) setAp({ ...aRow, extra_config: aRow.extra_config ?? {} });
-    setMessages(msgs ?? []);
+    try {
+      const [w, a, msgs] = await Promise.all([
+        invokeCyounneAdmin<{ data: any[] }>("select", { table: "api_keys", filters: { service: "whatsapp_business" } }),
+        invokeCyounneAdmin<{ data: any[] }>("select", { table: "api_keys", filters: { service: "activepieces" } }),
+        invokeCyounneAdmin<{ data: any[] }>("select", { table: "whatsapp_messages", order: { column: "created_at", ascending: false }, limit: 50 }),
+      ]);
+      const wRow = w.data?.[0]; const aRow = a.data?.[0];
+      if (wRow) setWa({ ...wRow, extra_config: wRow.extra_config ?? {} });
+      if (aRow) setAp({ ...aRow, extra_config: aRow.extra_config ?? {} });
+      setMessages(msgs.data ?? []);
+    } catch (e: any) { toast.error(e?.message); }
   };
 
   useEffect(() => {
@@ -41,15 +45,21 @@ export default function AdminWhatsApp() {
 
   const save = async (service: "whatsapp_business" | "activepieces", row: any) => {
     setBusy(true);
-    const { error } = await supabase.from("api_keys").update({
-      api_key: row.api_key,
-      enabled: row.enabled,
-      extra_config: row.extra_config ?? {},
-      updated_at: new Date().toISOString(),
-    }).eq("service", service);
-    setBusy(false);
-    if (error) toast.error(error.message);
-    else toast.success("Sauvegardé");
+    try {
+      await invokeCyounneAdmin("upsert", {
+        table: "api_keys",
+        onConflict: "service",
+        values: {
+          service,
+          api_key: row.api_key ?? "",
+          enabled: row.enabled,
+          extra_config: row.extra_config ?? {},
+          updated_at: new Date().toISOString(),
+        },
+      });
+      toast.success("Sauvegardé");
+    } catch (e: any) { toast.error(e?.message); }
+    finally { setBusy(false); }
   };
 
   const copy = (text: string) => {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeCyounneAdmin } from "@/lib/cyounneAdmin";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,35 +12,46 @@ export default function AdminKnowledge() {
   const [form, setForm] = useState({ category: "", title: "", content: "", tags: "" });
 
   const load = async () => {
-    const { data } = await supabase.from("knowledge").select("*").order("created_at", { ascending: false });
-    setRows(data ?? []);
+    try {
+      const res = await invokeCyounneAdmin<{ data: any[] }>("select", {
+        table: "knowledge", order: { column: "created_at", ascending: false },
+      });
+      setRows(res.data ?? []);
+    } catch (e: any) { toast.error(e?.message); }
   };
   useEffect(() => { load(); }, []);
 
   const add = async () => {
     if (!form.title || !form.content || !form.category) { toast.error("Catégorie, titre et contenu requis"); return; }
-    const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from("knowledge").insert({
-      category: form.category,
-      title: form.title,
-      content: form.content,
-      tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
-      validated: false,
-      created_by: user?.id ?? null,
-    });
-    if (error) toast.error(`Ajout impossible : ${error.message}`);
-    else { toast.success("Connaissance ajoutée. Cyounne apprend."); setForm({ category: "", title: "", content: "", tags: "" }); load(); }
+    try {
+      await invokeCyounneAdmin("insert", {
+        table: "knowledge",
+        values: {
+          category: form.category,
+          title: form.title,
+          content: form.content,
+          tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
+          validated: false,
+        },
+      });
+      toast.success("Connaissance ajoutée. Cyounne apprend.");
+      setForm({ category: "", title: "", content: "", tags: "" });
+      load();
+    } catch (e: any) { toast.error(`Ajout impossible : ${e?.message}`); }
   };
 
   const validate = async (id: string) => {
-    await supabase.from("knowledge").update({ validated: true }).eq("id", id);
-    toast.success("Validé");
-    load();
+    try {
+      await invokeCyounneAdmin("update", { table: "knowledge", values: { validated: true }, match: { id } });
+      toast.success("Validé"); load();
+    } catch (e: any) { toast.error(e?.message); }
   };
 
   const del = async (id: string) => {
-    await supabase.from("knowledge").delete().eq("id", id);
-    load();
+    try {
+      await invokeCyounneAdmin("delete", { table: "knowledge", match: { id } });
+      load();
+    } catch (e: any) { toast.error(e?.message); }
   };
 
   return (

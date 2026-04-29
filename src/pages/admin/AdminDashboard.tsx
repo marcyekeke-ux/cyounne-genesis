@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeCyounneAdmin } from "@/lib/cyounneAdmin";
 import { Card } from "@/components/ui/card";
 import { Brain, Users, Bell, FileText, Activity, Shield, KeyRound, BookOpen, Lock, LogOut } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -16,24 +16,19 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    (async () => {
-      const [m, a, r, c, k, md] = await Promise.all([
-        supabase.from("members").select("id", { count: "exact", head: true }),
-        supabase.from("alerts").select("id", { count: "exact", head: true }).eq("resolved", false),
-        supabase.from("reports").select("id", { count: "exact", head: true }),
-        supabase.from("conversations").select("id", { count: "exact", head: true }),
-        supabase.from("knowledge").select("id", { count: "exact", head: true }),
-        supabase.from("media_assets").select("id", { count: "exact", head: true }),
-      ]);
-      setStats({
-        members: m.count ?? 0,
-        alerts: a.count ?? 0,
-        reports: r.count ?? 0,
-        conversations: c.count ?? 0,
-        knowledge: k.count ?? 0,
-        media: md.count ?? 0,
-      });
-    })();
+    invokeCyounneAdmin<{ stats: Record<string, number> }>("stats")
+      .then((res) => {
+        const s = res.stats ?? {};
+        setStats({
+          members: s.members ?? 0,
+          alerts: s.alerts ?? 0,
+          reports: s.reports ?? 0,
+          conversations: s.conversations ?? 0,
+          knowledge: s.knowledge ?? 0,
+          media: s.media_assets ?? 0,
+        });
+      })
+      .catch((e) => toast.error(e?.message ?? "Erreur stats"));
   }, [isAdmin]);
 
   const unlock = async () => {

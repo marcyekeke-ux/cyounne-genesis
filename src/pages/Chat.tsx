@@ -15,6 +15,9 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 interface Msg { id: string; role: "user" | "assistant"; content: string; provider?: string; }
+type Step = { key: string; label: string; status: "pending" | "running" | "done" | "error"; detail?: string };
+interface ProgressMsg { id: string; role: "progress"; steps: Step[]; }
+type AnyMsg = Msg | ProgressMsg;
 
 const QUICK_ACTIONS_USER = [
   "Explique-moi EMR Genesis",
@@ -51,8 +54,8 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 export default function Chat() {
-  const { user, profile, isAdmin } = useAuth();
-  const [messages, setMessages] = useState<Msg[]>([]);
+  const { isAdmin } = useAuth();
+  const [messages, setMessages] = useState<AnyMsg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -64,7 +67,10 @@ export default function Chat() {
   const imageRef = useRef<HTMLInputElement>(null);
   const docRef = useRef<HTMLInputElement>(null);
 
-  const gender = (profile?.gender ?? "unknown") as "XY" | "XX" | "unknown";
+  // Pas de compte utilisateur côté Cyounne — on a un user/profile factice.
+  const user: any = null;
+  const profile: any = null;
+  const gender = "unknown" as "XY" | "XX" | "unknown";
 
   const voice = useVoice({
     onWake: () => setAvatarState("listening"),
@@ -72,30 +78,23 @@ export default function Chat() {
   });
 
   useEffect(() => {
-    if (!user) return;
-    (async () => {
-      const { data: existing } = await supabase
-        .from("conversations").select("id").eq("user_id", user.id)
-        .order("updated_at", { ascending: false }).limit(1).maybeSingle();
-      if (existing?.id) {
-        setConversationId(existing.id);
-        const { data: msgs } = await supabase
-          .from("messages").select("id,role,content,provider")
-          .eq("conversation_id", existing.id).order("created_at", { ascending: true }).limit(50);
-        setMessages((msgs ?? []) as Msg[]);
-      } else {
-        const { data: created } = await supabase
-          .from("conversations")
-          .insert({ user_id: user.id, title: "Conversation Cyounne", mode: isAdmin ? "admin" : "pax" })
-          .select("id").single();
-        if (created) setConversationId(created.id);
-      }
-    })();
-  }, [user, isAdmin]);
-
-  useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
+
+  // Mise à jour d'une étape de progression dans un message progress
+  function updateProgress(progressId: string, key: string, patch: Partial<Step>) {
+    setMessages((p) => p.map((m) => {
+      if (m.id !== progressId || (m as any).role !== "progress") return m;
+      const pm = m as ProgressMsg;
+      return { ...pm, steps: pm.steps.map((s) => s.key === key ? { ...s, ...patch } : s) };
+    }));
+  }
+
+  function pushProgress(steps: Step[]): string {
+    const id = crypto.randomUUID();
+    setMessages((p) => [...p, { id, role: "progress", steps }]);
+    return id;
+  }
 
   async function persistMessage(m: Omit<Msg, "id"> & { id?: string }) {
     if (!user || !conversationId) return null;
@@ -116,7 +115,10 @@ export default function Chat() {
     persistMessage(userMsg);
 
     try {
-      const history = [...messages, userMsg].slice(-12).map((m) => ({ role: m.role, content: m.content }));
+      const history = [...messages, userMsg]
+        .filter((m): m is Msg => (m as any).role === "user" || (m as any).role === "assistant")
+        .slice(-12)
+        .map((m) => ({ role: m.role, content: m.content }));
       const { data, error } = await supabase.functions.invoke("cyounne-chat", {
         body: { messages: history, isAdmin, gender },
       });
@@ -138,36 +140,64 @@ export default function Chat() {
 
   async function analyzeImage(file: File) {
     setBusy(true); setAvatarState("speaking");
+    const userMsg: Msg = { id: crypto.randomUUID(), role: "user", content: `Image envoyée : ${file.name}` };
+    setMessages((p) => [...p, userMsg]); persistMessage(userMsg);
+    const progressId = pushProgress([
+      { key: "upload", label: "Téléversement", status: "running" },
+      { key: "ocr", label: "Lecture OCR + texte", status: "pending" },
+      { key: "vision", label: "Analyse Gemini Vision", status: "pending" },
+      { key: "summary", label: "Résumé final", status: "pending" },
+    ]);
     try {
       const b64 = await fileToBase64(file);
-      const userMsg: Msg = { id: crypto.randomUUID(), role: "user", content: `Image envoyée : ${file.name}` };
-      setMessages((p) => [...p, userMsg]); persistMessage(userMsg);
+      updateProgress(progressId, "upload", { status: "done", detail: `${(file.size / 1024).toFixed(0)} Ko` });
+      updateProgress(progressId, "ocr", { status: "running" });
+      updateProgress(progressId, "vision", { status: "running" });
       const { data, error } = await supabase.functions.invoke("cyounne-vision", {
         body: { imageBase64: b64, mimeType: file.type, prompt: "Analyse cette image en français. Identifie personnes, logos, texte (OCR) et contexte. Sois factuel. Texte naturel uniquement, pas de markdown." },
       });
       if (error) throw error;
+      updateProgress(progressId, "ocr", { status: "done" });
+      updateProgress(progressId, "vision", { status: "done" });
+      updateProgress(progressId, "summary", { status: "running" });
       const reply: Msg = { id: crypto.randomUUID(), role: "assistant", content: clean(data?.analysis ?? "Analyse impossible, données insuffisantes"), provider: "gemini-vision" };
+      updateProgress(progressId, "summary", { status: "done" });
       setMessages((p) => [...p, reply]); persistMessage(reply);
       if (!muted && voiceMode) await speak(reply.content, gender, supabase);
     } catch (e: any) {
+      updateProgress(progressId, "vision", { status: "error", detail: e?.message });
       toast.error("Vision : " + (e?.message ?? "erreur"));
     } finally { setBusy(false); setAvatarState("idle"); }
   }
 
   async function analyzeDocument(file: File) {
     setBusy(true); setAvatarState("speaking");
+    const userMsg: Msg = { id: crypto.randomUUID(), role: "user", content: `Document envoyé : ${file.name}` };
+    setMessages((p) => [...p, userMsg]); persistMessage(userMsg);
+    const progressId = pushProgress([
+      { key: "upload", label: "Téléversement", status: "running" },
+      { key: "parse", label: "Extraction du texte", status: "pending" },
+      { key: "doc", label: "Analyse Gemini Document", status: "pending" },
+      { key: "summary", label: "Résumé final", status: "pending" },
+    ]);
     try {
       const b64 = await fileToBase64(file);
-      const userMsg: Msg = { id: crypto.randomUUID(), role: "user", content: `Document envoyé : ${file.name}` };
-      setMessages((p) => [...p, userMsg]); persistMessage(userMsg);
+      updateProgress(progressId, "upload", { status: "done", detail: `${(file.size / 1024).toFixed(0)} Ko` });
+      updateProgress(progressId, "parse", { status: "running" });
+      updateProgress(progressId, "doc", { status: "running" });
       const { data, error } = await supabase.functions.invoke("cyounne-doc", {
         body: { fileBase64: b64, mimeType: file.type || "application/pdf", fileName: file.name },
       });
       if (error) throw error;
+      updateProgress(progressId, "parse", { status: "done" });
+      updateProgress(progressId, "doc", { status: "done" });
+      updateProgress(progressId, "summary", { status: "running" });
       const reply: Msg = { id: crypto.randomUUID(), role: "assistant", content: clean(data?.analysis ?? "Analyse impossible, données insuffisantes"), provider: "gemini-doc" };
+      updateProgress(progressId, "summary", { status: "done" });
       setMessages((p) => [...p, reply]); persistMessage(reply);
       if (!muted && voiceMode) await speak(reply.content, gender, supabase);
     } catch (e: any) {
+      updateProgress(progressId, "doc", { status: "error", detail: e?.message });
       toast.error("Document : " + (e?.message ?? "erreur"));
     } finally { setBusy(false); setAvatarState("idle"); }
   }
@@ -245,17 +275,44 @@ export default function Chat() {
           </div>
         )}
 
-        {messages.map((m) => (
-          <div key={m.id} className={cn("flex animate-fade-in", m.role === "user" ? "justify-end" : "justify-start")}>
-            <Card className={cn(
-              "max-w-[85%] md:max-w-[70%] px-4 py-3 text-sm leading-relaxed",
-              m.role === "user" ? "bg-gradient-primary text-primary-foreground border-transparent shadow-elegant" : "glass",
-            )}>
-              <div className="whitespace-pre-wrap">{m.content}</div>
-              {m.provider && <div className="mt-2 text-[10px] uppercase tracking-widest opacity-50">via {m.provider}</div>}
-            </Card>
-          </div>
-        ))}
+        {messages.map((m) => {
+          if ((m as any).role === "progress") {
+            const pm = m as ProgressMsg;
+            return (
+              <div key={pm.id} className="flex justify-start animate-fade-in">
+                <Card className="glass px-4 py-3 text-xs space-y-1.5 max-w-[85%] md:max-w-[70%]">
+                  <div className="text-[10px] uppercase tracking-widest text-accent mb-1">Analyse Cyounne</div>
+                  {pm.steps.map((s) => (
+                    <div key={s.key} className="flex items-center gap-2">
+                      {s.status === "running" && <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />}
+                      {s.status === "done" && <span className="w-3.5 h-3.5 rounded-full bg-success inline-flex items-center justify-center text-[9px] text-background">✓</span>}
+                      {s.status === "pending" && <span className="w-3.5 h-3.5 rounded-full border border-border/60" />}
+                      {s.status === "error" && <span className="w-3.5 h-3.5 rounded-full bg-destructive inline-flex items-center justify-center text-[9px] text-background">!</span>}
+                      <span className={cn(
+                        s.status === "done" ? "text-muted-foreground line-through" :
+                        s.status === "running" ? "text-foreground font-medium" :
+                        s.status === "error" ? "text-destructive" : "text-muted-foreground"
+                      )}>{s.label}</span>
+                      {s.detail && <span className="text-[10px] text-muted-foreground">· {s.detail}</span>}
+                    </div>
+                  ))}
+                </Card>
+              </div>
+            );
+          }
+          const cm = m as Msg;
+          return (
+            <div key={cm.id} className={cn("flex animate-fade-in", cm.role === "user" ? "justify-end" : "justify-start")}>
+              <Card className={cn(
+                "max-w-[85%] md:max-w-[70%] px-4 py-3 text-sm leading-relaxed",
+                cm.role === "user" ? "bg-gradient-primary text-primary-foreground border-transparent shadow-elegant" : "glass",
+              )}>
+                <div className="whitespace-pre-wrap">{cm.content}</div>
+                {cm.provider && <div className="mt-2 text-[10px] uppercase tracking-widest opacity-50">via {cm.provider}</div>}
+              </Card>
+            </div>
+          );
+        })}
 
         {busy && (
           <div className="flex justify-start">

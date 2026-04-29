@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { invokeCyounneAdmin } from "@/lib/cyounneAdmin";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,18 +23,22 @@ export default function AdminAlerts() {
   const [subs, setSubs] = useState<number>(0);
 
   const load = async () => {
-    const [{ data }, { count }] = await Promise.all([
-      supabase.from("alerts").select("*").order("created_at", { ascending: false }),
-      supabase.from("push_subscriptions").select("id", { count: "exact", head: true }),
-    ]);
-    setRows(data ?? []);
-    setSubs(count ?? 0);
+    try {
+      const [a, s] = await Promise.all([
+        invokeCyounneAdmin<{ data: any[] }>("select", { table: "alerts", order: { column: "created_at", ascending: false } }),
+        invokeCyounneAdmin<{ data: any[] }>("select", { table: "push_subscriptions" }),
+      ]);
+      setRows(a.data ?? []);
+      setSubs(s.data?.length ?? 0);
+    } catch (e: any) { toast.error(e?.message); }
   };
   useEffect(() => { load(); }, []);
 
   const resolve = async (id: string) => {
-    await supabase.from("alerts").update({ resolved: true }).eq("id", id);
-    load();
+    try {
+      await invokeCyounneAdmin("update", { table: "alerts", values: { resolved: true }, match: { id } });
+      load();
+    } catch (e: any) { toast.error(e?.message); }
   };
 
   const sendPush = async (title?: string, message?: string) => {
@@ -63,15 +68,11 @@ export default function AdminAlerts() {
         </div>
       </header>
 
-      {/* OneSignal */}
       <Card className="glass p-5 space-y-3">
         <div className="flex items-center gap-2">
           <BellRing className="w-5 h-5 text-accent" />
           <h2 className="font-display font-bold">Envoyer une notification push</h2>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Configurez OneSignal dans <a href="/admin/api-keys" className="underline">Clés API</a> (App ID + REST API Key dans extra_config).
-        </p>
         <div className="grid md:grid-cols-3 gap-3">
           <Input placeholder="Titre" value={pushTitle} onChange={(e) => setPushTitle(e.target.value)} />
           <Input placeholder="URL d'ouverture (optionnel)" value={pushUrl} onChange={(e) => setPushUrl(e.target.value)} className="md:col-span-2" />
