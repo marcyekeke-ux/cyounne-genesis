@@ -140,36 +140,64 @@ export default function Chat() {
 
   async function analyzeImage(file: File) {
     setBusy(true); setAvatarState("speaking");
+    const userMsg: Msg = { id: crypto.randomUUID(), role: "user", content: `Image envoyée : ${file.name}` };
+    setMessages((p) => [...p, userMsg]); persistMessage(userMsg);
+    const progressId = pushProgress([
+      { key: "upload", label: "Téléversement", status: "running" },
+      { key: "ocr", label: "Lecture OCR + texte", status: "pending" },
+      { key: "vision", label: "Analyse Gemini Vision", status: "pending" },
+      { key: "summary", label: "Résumé final", status: "pending" },
+    ]);
     try {
       const b64 = await fileToBase64(file);
-      const userMsg: Msg = { id: crypto.randomUUID(), role: "user", content: `Image envoyée : ${file.name}` };
-      setMessages((p) => [...p, userMsg]); persistMessage(userMsg);
+      updateProgress(progressId, "upload", { status: "done", detail: `${(file.size / 1024).toFixed(0)} Ko` });
+      updateProgress(progressId, "ocr", { status: "running" });
+      updateProgress(progressId, "vision", { status: "running" });
       const { data, error } = await supabase.functions.invoke("cyounne-vision", {
         body: { imageBase64: b64, mimeType: file.type, prompt: "Analyse cette image en français. Identifie personnes, logos, texte (OCR) et contexte. Sois factuel. Texte naturel uniquement, pas de markdown." },
       });
       if (error) throw error;
+      updateProgress(progressId, "ocr", { status: "done" });
+      updateProgress(progressId, "vision", { status: "done" });
+      updateProgress(progressId, "summary", { status: "running" });
       const reply: Msg = { id: crypto.randomUUID(), role: "assistant", content: clean(data?.analysis ?? "Analyse impossible, données insuffisantes"), provider: "gemini-vision" };
+      updateProgress(progressId, "summary", { status: "done" });
       setMessages((p) => [...p, reply]); persistMessage(reply);
       if (!muted && voiceMode) await speak(reply.content, gender, supabase);
     } catch (e: any) {
+      updateProgress(progressId, "vision", { status: "error", detail: e?.message });
       toast.error("Vision : " + (e?.message ?? "erreur"));
     } finally { setBusy(false); setAvatarState("idle"); }
   }
 
   async function analyzeDocument(file: File) {
     setBusy(true); setAvatarState("speaking");
+    const userMsg: Msg = { id: crypto.randomUUID(), role: "user", content: `Document envoyé : ${file.name}` };
+    setMessages((p) => [...p, userMsg]); persistMessage(userMsg);
+    const progressId = pushProgress([
+      { key: "upload", label: "Téléversement", status: "running" },
+      { key: "parse", label: "Extraction du texte", status: "pending" },
+      { key: "doc", label: "Analyse Gemini Document", status: "pending" },
+      { key: "summary", label: "Résumé final", status: "pending" },
+    ]);
     try {
       const b64 = await fileToBase64(file);
-      const userMsg: Msg = { id: crypto.randomUUID(), role: "user", content: `Document envoyé : ${file.name}` };
-      setMessages((p) => [...p, userMsg]); persistMessage(userMsg);
+      updateProgress(progressId, "upload", { status: "done", detail: `${(file.size / 1024).toFixed(0)} Ko` });
+      updateProgress(progressId, "parse", { status: "running" });
+      updateProgress(progressId, "doc", { status: "running" });
       const { data, error } = await supabase.functions.invoke("cyounne-doc", {
         body: { fileBase64: b64, mimeType: file.type || "application/pdf", fileName: file.name },
       });
       if (error) throw error;
+      updateProgress(progressId, "parse", { status: "done" });
+      updateProgress(progressId, "doc", { status: "done" });
+      updateProgress(progressId, "summary", { status: "running" });
       const reply: Msg = { id: crypto.randomUUID(), role: "assistant", content: clean(data?.analysis ?? "Analyse impossible, données insuffisantes"), provider: "gemini-doc" };
+      updateProgress(progressId, "summary", { status: "done" });
       setMessages((p) => [...p, reply]); persistMessage(reply);
       if (!muted && voiceMode) await speak(reply.content, gender, supabase);
     } catch (e: any) {
+      updateProgress(progressId, "doc", { status: "error", detail: e?.message });
       toast.error("Document : " + (e?.message ?? "erreur"));
     } finally { setBusy(false); setAvatarState("idle"); }
   }
