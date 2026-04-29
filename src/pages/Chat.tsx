@@ -275,17 +275,44 @@ export default function Chat() {
           </div>
         )}
 
-        {messages.map((m) => (
-          <div key={m.id} className={cn("flex animate-fade-in", m.role === "user" ? "justify-end" : "justify-start")}>
-            <Card className={cn(
-              "max-w-[85%] md:max-w-[70%] px-4 py-3 text-sm leading-relaxed",
-              m.role === "user" ? "bg-gradient-primary text-primary-foreground border-transparent shadow-elegant" : "glass",
-            )}>
-              <div className="whitespace-pre-wrap">{m.content}</div>
-              {m.provider && <div className="mt-2 text-[10px] uppercase tracking-widest opacity-50">via {m.provider}</div>}
-            </Card>
-          </div>
-        ))}
+        {messages.map((m) => {
+          if ((m as any).role === "progress") {
+            const pm = m as ProgressMsg;
+            return (
+              <div key={pm.id} className="flex justify-start animate-fade-in">
+                <Card className="glass px-4 py-3 text-xs space-y-1.5 max-w-[85%] md:max-w-[70%]">
+                  <div className="text-[10px] uppercase tracking-widest text-accent mb-1">Analyse Cyounne</div>
+                  {pm.steps.map((s) => (
+                    <div key={s.key} className="flex items-center gap-2">
+                      {s.status === "running" && <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />}
+                      {s.status === "done" && <span className="w-3.5 h-3.5 rounded-full bg-success inline-flex items-center justify-center text-[9px] text-background">✓</span>}
+                      {s.status === "pending" && <span className="w-3.5 h-3.5 rounded-full border border-border/60" />}
+                      {s.status === "error" && <span className="w-3.5 h-3.5 rounded-full bg-destructive inline-flex items-center justify-center text-[9px] text-background">!</span>}
+                      <span className={cn(
+                        s.status === "done" ? "text-muted-foreground line-through" :
+                        s.status === "running" ? "text-foreground font-medium" :
+                        s.status === "error" ? "text-destructive" : "text-muted-foreground"
+                      )}>{s.label}</span>
+                      {s.detail && <span className="text-[10px] text-muted-foreground">· {s.detail}</span>}
+                    </div>
+                  ))}
+                </Card>
+              </div>
+            );
+          }
+          const cm = m as Msg;
+          return (
+            <div key={cm.id} className={cn("flex animate-fade-in", cm.role === "user" ? "justify-end" : "justify-start")}>
+              <Card className={cn(
+                "max-w-[85%] md:max-w-[70%] px-4 py-3 text-sm leading-relaxed",
+                cm.role === "user" ? "bg-gradient-primary text-primary-foreground border-transparent shadow-elegant" : "glass",
+              )}>
+                <div className="whitespace-pre-wrap">{cm.content}</div>
+                {cm.provider && <div className="mt-2 text-[10px] uppercase tracking-widest opacity-50">via {cm.provider}</div>}
+              </Card>
+            </div>
+          );
+        })}
 
         {busy && (
           <div className="flex justify-start">
