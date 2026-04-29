@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
+import { invokeCyounneAdmin } from "@/lib/cyounneAdmin";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,14 +9,17 @@ import { FileText, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function AdminReports() {
-  const { user } = useAuth();
   const [rows, setRows] = useState<any[]>([]);
   const [form, setForm] = useState({ type: "quotidien", title: "", facts: "" });
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
-    const { data } = await supabase.from("reports").select("*").order("created_at", { ascending: false });
-    setRows(data ?? []);
+    try {
+      const res = await invokeCyounneAdmin<{ data: any[] }>("select", {
+        table: "reports", order: { column: "created_at", ascending: false },
+      });
+      setRows(res.data ?? []);
+    } catch (e: any) { toast.error(e?.message); }
   };
   useEffect(() => { load(); }, []);
 
@@ -25,7 +28,6 @@ export default function AdminReports() {
     if (!form.facts) { toast.error("Aucun fait fourni : impossible de produire un rapport"); return; }
     setBusy(true);
     try {
-      // demande à Cyounne de structurer un rapport SUR LES FAITS FOURNIS uniquement
       const { data, error } = await supabase.functions.invoke("cyounne-chat", {
         body: {
           isAdmin: true, gender: "XY",
@@ -37,13 +39,10 @@ export default function AdminReports() {
       });
       if (error) throw error;
       const content = (data as any)?.content ?? "Aucune donnée exploitable disponible";
-      const { error: insErr } = await supabase.from("reports").insert({
-        type: form.type,
-        title: form.title,
-        content: { body: content, facts: form.facts },
-        generated_by: user?.id,
+      await invokeCyounneAdmin("insert", {
+        table: "reports",
+        values: { type: form.type, title: form.title, content: { body: content, facts: form.facts } },
       });
-      if (insErr) throw insErr;
       toast.success("Rapport généré");
       setForm({ type: "quotidien", title: "", facts: "" });
       load();
@@ -55,7 +54,6 @@ export default function AdminReports() {
   };
 
   const downloadPdf = (r: any) => {
-    // simple fallback : .txt téléchargeable (un vrai PDF nécessiterait Brevo + lib)
     const txt = `# ${r.title}\nType: ${r.type}\nDate: ${new Date(r.created_at).toLocaleString("fr-FR")}\n\n${(r.content?.body ?? "")}\n\n---\nFaits source:\n${r.content?.facts ?? ""}`;
     const blob = new Blob([txt], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
@@ -86,7 +84,7 @@ export default function AdminReports() {
         </div>
         <Textarea
           rows={6}
-          placeholder="Collez ici uniquement des FAITS RÉELS observés (chiffres, événements, comportements). Cyounne refusera d'inventer."
+          placeholder="Collez ici uniquement des FAITS RÉELS observés (chiffres, événements, comportements)."
           value={form.facts}
           onChange={(e) => setForm({ ...form, facts: e.target.value })}
         />
