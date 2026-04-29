@@ -245,6 +245,16 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    if (action === "storage_upload") {
+      const { bucket = "media", path, base64, contentType } = body;
+      if (!path || !base64) return json({ error: "path + base64 requis" }, 400);
+      const bin = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      const { error: upErr } = await sb.storage.from(bucket).upload(path, bin, { contentType, upsert: false });
+      if (upErr) return json({ error: upErr.message }, 400);
+      const { data: { publicUrl } } = sb.storage.from(bucket).getPublicUrl(path);
+      return json({ path, publicUrl });
+    }
+
     if (action === "stats") {
       const tables = ["members", "alerts", "reports", "conversations", "knowledge", "media_assets"] as const;
       const out: Record<string, number> = {};
