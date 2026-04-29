@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeCyounneAdmin } from "@/lib/cyounneAdmin";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,18 @@ import { toast } from "sonner";
 import { Image as ImageIcon, Upload, Trash2, Loader2 } from "lucide-react";
 
 const CATEGORIES = ["mr_ekeke", "logo_emr", "membres", "videos_officielles", "musiques_emr", "documents", "autres"];
+
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const s = reader.result as string;
+      resolve(s.split(",")[1] ?? "");
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function AdminMedia() {
   const [rows, setRows] = useState<any[]>([]);
@@ -16,8 +28,12 @@ export default function AdminMedia() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
-    const { data } = await supabase.from("media_assets").select("*").order("created_at", { ascending: false });
-    setRows(data ?? []);
+    try {
+      const res = await invokeCyounneAdmin<{ data: any[] }>("select", {
+        table: "media_assets", order: { column: "created_at", ascending: false },
+      });
+      setRows(res.data ?? []);
+    } catch (e: any) { toast.error(e?.message); }
   };
   useEffect(() => { load(); }, []);
 
@@ -25,23 +41,18 @@ export default function AdminMedia() {
     if (!label) { toast.error("Donnez un label avant d'uploader"); return; }
     setBusy(true);
     try {
-      // 1) Upload dans le storage Supabase (bucket media)
       const path = `${category}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-      const { error: upErr } = await supabase.storage.from("media").upload(path, file, { upsert: false });
-      if (upErr) throw new Error(`Storage : ${upErr.message}`);
-      const { data: { publicUrl } } = supabase.storage.from("media").getPublicUrl(path);
-
-      // 2) Référencer dans media_assets
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from("media_assets").insert({
-        category,
-        label,
-        url: publicUrl,
-        mime_type: file.type,
-        metadata: { size: file.size, name: file.name, path, cloudinary_cloud: "drctjhwvh" },
-        uploaded_by: user?.id ?? null,
+      const base64 = await fileToBase64(file);
+      const upRes = await invokeCyounneAdmin<{ publicUrl: string }>("storage_upload", {
+        bucket: "media", path, base64, contentType: file.type,
       });
-      if (error) throw new Error(`DB : ${error.message}`);
+      await invokeCyounneAdmin("insert", {
+        table: "media_assets",
+        values: {
+          category, label, url: upRes.publicUrl, mime_type: file.type,
+          metadata: { size: file.size, name: file.name, path },
+        },
+      });
       toast.success("Média ajouté. Cyounne le reconnaît.");
       setLabel("");
       load();
@@ -54,8 +65,10 @@ export default function AdminMedia() {
   };
 
   const del = async (row: any) => {
-    await supabase.from("media_assets").delete().eq("id", row.id);
-    load();
+    try {
+      await invokeCyounneAdmin("delete", { table: "media_assets", match: { id: row.id } });
+      load();
+    } catch (e: any) { toast.error(e?.message); }
   };
 
   return (
@@ -64,7 +77,7 @@ export default function AdminMedia() {
         <ImageIcon className="w-7 h-7 text-accent" />
         <div>
           <h1 className="font-display text-3xl font-black text-gradient">Médias</h1>
-          <p className="text-sm text-muted-foreground">Photos Mr EKEKE, logo EMR, membres, vidéos officielles, musiques. Cyounne reconnaît tout ce qui est uploadé.</p>
+          <p className="text-sm text-muted-foreground">Photos Mr ÉKÉKÉ, logo EMR, membres, vidéos, musiques. Cyounne reconnaît tout ce qui est uploadé.</p>
         </div>
       </header>
 

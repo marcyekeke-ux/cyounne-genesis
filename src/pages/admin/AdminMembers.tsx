@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeCyounneAdmin } from "@/lib/cyounneAdmin";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Users, Plus, Crown, Ban, CheckCircle2, Trash2 } from "lucide-react";
+import { Users, Plus, Ban, CheckCircle2, Trash2 } from "lucide-react";
 
 type Level = "pax" | "mega_pax" | "super_pax" | "roi" | "reine";
 type Status = "actif" | "bloque" | "suspendu";
@@ -17,8 +17,12 @@ export default function AdminMembers() {
   const [search, setSearch] = useState("");
 
   const load = async () => {
-    const { data } = await supabase.from("members").select("*").order("joined_at", { ascending: false });
-    setRows(data ?? []);
+    try {
+      const res = await invokeCyounneAdmin<{ data: any[] }>("select", {
+        table: "members", order: { column: "joined_at", ascending: false },
+      });
+      setRows(res.data ?? []);
+    } catch (e: any) { toast.error(e?.message); }
   };
   useEffect(() => { load(); }, []);
 
@@ -26,27 +30,36 @@ export default function AdminMembers() {
     if (!form.pax_id || !form.full_name) { toast.error("PAX ID et nom requis"); return; }
     const qr = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent("EMR-PAX-" + form.pax_id)}`;
     const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(form.pax_id)}`;
-    const { error } = await supabase.from("members").insert({
-      ...form, qr_code: qr, avatar_url: avatar,
-    });
-    if (error) toast.error(error.message);
-    else { toast.success("Membre ajouté"); setForm({ pax_id: "", full_name: "", email: "", phone: "", level: "pax" }); load(); }
+    try {
+      await invokeCyounneAdmin("insert", {
+        table: "members",
+        values: { ...form, qr_code: qr, avatar_url: avatar },
+      });
+      toast.success("Membre ajouté");
+      setForm({ pax_id: "", full_name: "", email: "", phone: "", level: "pax" });
+      load();
+    } catch (e: any) { toast.error(e?.message); }
   };
 
   const setLevel = async (id: string, level: Level) => {
-    await supabase.from("members").update({ level }).eq("id", id);
-    toast.success("Niveau mis à jour");
-    load();
+    try {
+      await invokeCyounneAdmin("update", { table: "members", values: { level }, match: { id } });
+      toast.success("Niveau mis à jour"); load();
+    } catch (e: any) { toast.error(e?.message); }
   };
 
   const setStatus = async (id: string, status: Status) => {
-    await supabase.from("members").update({ status }).eq("id", id);
-    load();
+    try {
+      await invokeCyounneAdmin("update", { table: "members", values: { status }, match: { id } });
+      load();
+    } catch (e: any) { toast.error(e?.message); }
   };
 
   const del = async (id: string) => {
-    await supabase.from("members").delete().eq("id", id);
-    load();
+    try {
+      await invokeCyounneAdmin("delete", { table: "members", match: { id } });
+      load();
+    } catch (e: any) { toast.error(e?.message); }
   };
 
   const filtered = rows.filter((r) =>
