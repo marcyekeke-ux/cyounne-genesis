@@ -115,7 +115,10 @@ export default function Chat() {
     persistMessage(userMsg);
 
     try {
-      const history = [...messages, userMsg].slice(-12).map((m) => ({ role: m.role, content: m.content }));
+      const history = [...messages, userMsg]
+        .filter((m): m is Msg => (m as any).role === "user" || (m as any).role === "assistant")
+        .slice(-12)
+        .map((m) => ({ role: m.role, content: m.content }));
       const { data, error } = await supabase.functions.invoke("cyounne-chat", {
         body: { messages: history, isAdmin, gender },
       });
