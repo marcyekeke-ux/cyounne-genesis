@@ -1,81 +1,61 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import type { User, Session } from "@supabase/supabase-js";
-
-const ADMIN_FLAG_KEY = "cy_admin_unlocked";
+import { invokeCyounneAdmin, setAdminToken, clearAdminToken, getAdminToken, ADMIN_FLAG_KEY } from "@/lib/cyounneAdmin";
 
 /**
  * Cyounne n'a PAS de système de comptes visible.
- * - Une session anonyme est créée silencieusement pour chaque visiteur (invisible).
- * - L'accès admin se débloque uniquement via le mot de passe secret de Mr EKEKE
- *   (vérifié par l'edge function `bootstrap-admin`, puis flag stocké en sessionStorage).
+ * - Aucune session anonyme : tout l'admin passe par l'edge function `cyounne-admin`
+ *   qui utilise le mot de passe secret de Mr ÉKÉKÉ pour émettre un jeton signé.
+ * - Le statut admin est dérivé de la présence d'un jeton non expiré en sessionStorage.
  */
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState<boolean>(
-    typeof window !== "undefined" && sessionStorage.getItem(ADMIN_FLAG_KEY) === "1"
+    typeof window !== "undefined" && sessionStorage.getItem(ADMIN_FLAG_KEY) === "1" && !!getAdminToken()
   );
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_evt, sess) => {
-      setSession(sess);
-      setUser(sess?.user ?? null);
-      if (sess?.user) {
-        setTimeout(() => loadProfile(sess.user.id), 0);
-      } else {
-        setProfile(null);
+    // Vérifier que le jeton existe encore et n'a pas expiré
+    if (!isAdmin) return;
+    const token = getAdminToken();
+    if (!token) {
+      setIsAdmin(false);
+      return;
+    }
+    invokeCyounneAdmin<{ ok: boolean }>("verify").then((res) => {
+      if (!res?.ok) {
+        clearAdminToken();
+        setIsAdmin(false);
       }
+    }).catch(() => {
+      clearAdminToken();
+      setIsAdmin(false);
     });
-
-    (async () => {
-      const { data: { session: sess } } = await supabase.auth.getSession();
-      if (sess?.user) {
-        setSession(sess);
-        setUser(sess.user);
-        loadProfile(sess.user.id);
-        setLoading(false);
-      } else {
-        // Sign in anonymously (silent) so we have a user_id for DB writes.
-        const { data, error } = await supabase.auth.signInAnonymously();
-        if (error) {
-          console.warn("Anon sign-in failed (Cyounne reste utilisable hors-ligne):", error.message);
-        } else if (data.session) {
-          setSession(data.session);
-          setUser(data.user ?? null);
-          if (data.user) loadProfile(data.user.id);
-        }
-        setLoading(false);
-      }
-    })();
-
-    return () => subscription.unsubscribe();
   }, []);
 
-  async function loadProfile(userId: string) {
-    const { data } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
-    setProfile(data);
-  }
-
   const unlockAdmin = async (password: string) => {
-    const { data, error } = await supabase.functions.invoke("bootstrap-admin", { body: { password } });
-    if (error) throw error;
-    if ((data as any)?.error) throw new Error((data as any).error);
-    sessionStorage.setItem(ADMIN_FLAG_KEY, "1");
-    setIsAdmin(true);
-    return true;
+    setLoading(true);
+    try {
+      const res = await invokeCyounneAdmin<{ token: string }>("unlock", { password });
+      if (!res?.token) throw new Error("Échec du déverrouillage");
+      setAdminToken(res.token);
+      setIsAdmin(true);
+      return true;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const lockAdmin = () => {
-    sessionStorage.removeItem(ADMIN_FLAG_KEY);
+    clearAdminToken();
     setIsAdmin(false);
   };
 
-  // Compat
+  // Compat avec l'ancien hook
   const signOut = lockAdmin;
-  const reload = () => user && loadProfile(user.id);
+  const reload = () => {};
+  const user = null;
+  const session = null;
+  const profile = null;
   const roles: string[] = isAdmin ? ["admin"] : [];
 
   return { user, session, profile, isAdmin, loading, unlockAdmin, lockAdmin, signOut, reload, roles };
