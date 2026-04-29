@@ -54,8 +54,8 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 export default function Chat() {
-  const { user, profile, isAdmin } = useAuth();
-  const [messages, setMessages] = useState<Msg[]>([]);
+  const { isAdmin } = useAuth();
+  const [messages, setMessages] = useState<AnyMsg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -67,7 +67,10 @@ export default function Chat() {
   const imageRef = useRef<HTMLInputElement>(null);
   const docRef = useRef<HTMLInputElement>(null);
 
-  const gender = (profile?.gender ?? "unknown") as "XY" | "XX" | "unknown";
+  // Pas de compte utilisateur côté Cyounne — on a un user/profile factice.
+  const user: any = null;
+  const profile: any = null;
+  const gender = "unknown" as "XY" | "XX" | "unknown";
 
   const voice = useVoice({
     onWake: () => setAvatarState("listening"),
@@ -75,30 +78,23 @@ export default function Chat() {
   });
 
   useEffect(() => {
-    if (!user) return;
-    (async () => {
-      const { data: existing } = await supabase
-        .from("conversations").select("id").eq("user_id", user.id)
-        .order("updated_at", { ascending: false }).limit(1).maybeSingle();
-      if (existing?.id) {
-        setConversationId(existing.id);
-        const { data: msgs } = await supabase
-          .from("messages").select("id,role,content,provider")
-          .eq("conversation_id", existing.id).order("created_at", { ascending: true }).limit(50);
-        setMessages((msgs ?? []) as Msg[]);
-      } else {
-        const { data: created } = await supabase
-          .from("conversations")
-          .insert({ user_id: user.id, title: "Conversation Cyounne", mode: isAdmin ? "admin" : "pax" })
-          .select("id").single();
-        if (created) setConversationId(created.id);
-      }
-    })();
-  }, [user, isAdmin]);
-
-  useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
+
+  // Mise à jour d'une étape de progression dans un message progress
+  function updateProgress(progressId: string, key: string, patch: Partial<Step>) {
+    setMessages((p) => p.map((m) => {
+      if (m.id !== progressId || (m as any).role !== "progress") return m;
+      const pm = m as ProgressMsg;
+      return { ...pm, steps: pm.steps.map((s) => s.key === key ? { ...s, ...patch } : s) };
+    }));
+  }
+
+  function pushProgress(steps: Step[]): string {
+    const id = crypto.randomUUID();
+    setMessages((p) => [...p, { id, role: "progress", steps }]);
+    return id;
+  }
 
   async function persistMessage(m: Omit<Msg, "id"> & { id?: string }) {
     if (!user || !conversationId) return null;
