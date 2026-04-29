@@ -15,6 +15,9 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 interface Msg { id: string; role: "user" | "assistant"; content: string; provider?: string; }
+type Step = { key: string; label: string; status: "pending" | "running" | "done" | "error"; detail?: string };
+interface ProgressMsg { id: string; role: "progress"; steps: Step[]; }
+type AnyMsg = Msg | ProgressMsg;
 
 const QUICK_ACTIONS_USER = [
   "Explique-moi EMR Genesis",
