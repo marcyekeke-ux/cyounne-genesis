@@ -49,10 +49,30 @@ CAPACITÉS : analyse et raisonnement avancés, résolution de problèmes complex
 EMR Business : fondée le 08 janvier 2022 par Monsieur ÉKÉKÉ. Devise "Sécurité, Assurance, Gaieté". Services : Paxage, graphisme, photographie, vente, WEWA MEN, formation. Niveaux : PAX, MEGA PAX, SUPER PAX, Roi, Reine.`;
 
 const PROVIDERS = [
+  { name: "lovable", url: "https://ai.gateway.lovable.dev/v1/chat/completions", model: "google/gemini-2.5-flash", keyEnv: "LOVABLE_API_KEY" },
   { name: "groq", url: "https://api.groq.com/openai/v1/chat/completions", model: "llama-3.3-70b-versatile", keyEnv: "GROQ_API_KEY" },
   { name: "gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", model: "gemini-2.0-flash", keyEnv: "GEMINI_API_KEY" },
   { name: "mistral", url: "https://api.mistral.ai/v1/chat/completions", model: "mistral-small-latest", keyEnv: "MISTRAL_API_KEY" },
 ];
+
+async function fetchKnowledge(): Promise<string> {
+  try {
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY");
+    if (!url || !key) return "";
+    const r = await fetch(`${url}/rest/v1/knowledge?select=category,title,content,tags,validated&order=created_at.desc&limit=200`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
+    });
+    if (!r.ok) return "";
+    const rows = await r.json() as Array<{ category: string; title: string; content: string; tags?: string[]; validated?: boolean }>;
+    if (!Array.isArray(rows) || rows.length === 0) return "";
+    const lines = rows.map((k) => `• [${k.category}] ${k.title} : ${k.content}${k.tags?.length ? ` (tags: ${k.tags.join(", ")})` : ""}`);
+    return `\n\nCONNAISSANCES OFFICIELLES (PRIORITÉ ABSOLUE — utilise CES informations en premier avant toute autre source) :\n${lines.join("\n")}\n`;
+  } catch (e) {
+    console.warn("knowledge fetch failed", (e as Error).message);
+    return "";
+  }
+}
 
 function stripMarkdown(text: string): string {
   if (!text) return text;
