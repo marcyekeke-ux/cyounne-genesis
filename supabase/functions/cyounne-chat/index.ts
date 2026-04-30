@@ -140,8 +140,10 @@ Deno.serve(async (req) => {
       ? "[CONTEXTE: tu parles à Monsieur ÉKÉKÉ, ton créateur. Style JARVIS, commence souvent par 'Oui Monsieur ÉKÉKÉ' ou 'Accord Monsieur ÉKÉKÉ'. Texte naturel uniquement, pas de markdown.]"
       : `[CONTEXTE: utilisateur ${gender === "XY" ? "homme — style direct doux" : gender === "XX" ? "femme — style chaleureux expressif" : "inconnu — style neutre"}. Texte naturel uniquement, pas de markdown.]`;
 
+    const knowledgeBlock = await fetchKnowledge();
+
     const fullMessages = [
-      { role: "system", content: SYSTEM_PROMPT + "\n" + personalityHint },
+      { role: "system", content: SYSTEM_PROMPT + "\n" + personalityHint + knowledgeBlock },
       ...messages,
     ];
 
