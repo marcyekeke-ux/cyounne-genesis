@@ -355,15 +355,66 @@ export default function Chat() {
             );
           }
           const cm = m as Msg;
+          const isAssistant = cm.role === "assistant";
           return (
-            <div key={cm.id} className={cn("flex animate-fade-in", cm.role === "user" ? "justify-end" : "justify-start")}>
+            <div key={cm.id} className={cn("flex flex-col animate-fade-in gap-1.5", cm.role === "user" ? "items-end" : "items-start")}>
               <Card className={cn(
                 "max-w-[85%] md:max-w-[70%] px-4 py-3 text-sm leading-relaxed",
                 cm.role === "user" ? "bg-gradient-primary text-primary-foreground border-transparent shadow-elegant" : "glass",
               )}>
                 <div className="whitespace-pre-wrap">{cm.content}</div>
+                {cm.media && cm.media.results.length > 0 && (
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {cm.media.results.map((r, i) => cm.media!.kind === "image" ? (
+                      <a key={i} href={r.url} target="_blank" rel="noreferrer" className="block rounded-lg overflow-hidden border border-border/50 hover:border-accent transition">
+                        <img src={r.thumb || r.url} alt={r.credit ?? "image"} loading="lazy" className="w-full h-28 object-cover" />
+                        {r.credit && <div className="px-1.5 py-1 text-[9px] text-muted-foreground truncate">© {r.credit}</div>}
+                      </a>
+                    ) : (
+                      <a key={i} href={r.url} target="_blank" rel="noreferrer" className="block rounded-lg overflow-hidden border border-border/50 hover:border-accent transition relative group">
+                        <img src={r.thumb} alt={r.title ?? "video"} loading="lazy" className="w-full h-28 object-cover" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/30 group-hover:bg-background/10 transition">
+                          <Play className="w-7 h-7 text-white drop-shadow" />
+                        </div>
+                        <div className="px-1.5 py-1 text-[10px] truncate">{r.title}</div>
+                      </a>
+                    ))}
+                  </div>
+                )}
                 {cm.provider && <div className="mt-2 text-[10px] uppercase tracking-widest opacity-50">via {cm.provider}</div>}
               </Card>
+              {isAssistant && (
+                <div className="flex items-center gap-1 px-1 opacity-70 hover:opacity-100 transition">
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(cm.content); toast.success("Copié"); }}
+                    className="p-1.5 rounded-md hover:bg-secondary/60" title="Copier"
+                  ><Copy className="w-3.5 h-3.5" /></button>
+                  <button
+                    onClick={() => setMessages((p) => p.map((x) => x.id === cm.id && (x as any).role === "assistant" ? { ...(x as Msg), liked: !(x as Msg).liked } : x))}
+                    className={cn("p-1.5 rounded-md hover:bg-secondary/60", cm.liked && "text-accent")} title="J'aime"
+                  ><ThumbsUp className="w-3.5 h-3.5" /></button>
+                  <button
+                    onClick={async () => {
+                      const sharePayload = { title: "Cyounne", text: cm.content };
+                      if ((navigator as any).share) { try { await (navigator as any).share(sharePayload); } catch {} }
+                      else { navigator.clipboard.writeText(cm.content); toast.success("Texte copié pour partage"); }
+                    }}
+                    className="p-1.5 rounded-md hover:bg-secondary/60" title="Partager"
+                  ><Share2 className="w-3.5 h-3.5" /></button>
+                  <button
+                    onClick={() => {
+                      // Recherche dernier message user et regénère
+                      const idx = messages.findIndex((x) => x.id === cm.id);
+                      const prevUser = [...messages.slice(0, idx)].reverse().find((x) => (x as any).role === "user") as Msg | undefined;
+                      if (prevUser) {
+                        setMessages((p) => p.filter((x) => x.id !== cm.id));
+                        sendMessage(prevUser.content);
+                      }
+                    }}
+                    className="p-1.5 rounded-md hover:bg-secondary/60" title="Régénérer"
+                  ><RefreshCw className="w-3.5 h-3.5" /></button>
+                </div>
+              )}
             </div>
           );
         })}
