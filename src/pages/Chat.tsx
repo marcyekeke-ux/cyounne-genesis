@@ -47,15 +47,15 @@ function buildSuggestions(last: Msg | undefined, isAdmin: boolean): string[] {
 const QUICK_ACTIONS_USER = [
   "Explique-moi EMR Genesis",
   "Comment fonctionne le Paxage ?",
-  "Quels sont les niveaux des membres ?",
+  "Envoie-moi une photo de Kinshasa",
+  "Une citation de Harvey Specter",
 ];
 
 const QUICK_ACTIONS_ADMIN = [
   "cyounne vision totale",
   "cyounne rapport reel",
-  "cyounne performance",
-  "cyounne risques",
   "cyounne strategie",
+  "Coache-moi en éloquence",
 ];
 
 function clean(text: string): string {
