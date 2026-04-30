@@ -8,3 +8,24 @@ verify_jwt = false
 
 [functions.cyounne-admin]
 verify_jwt = false
+
+[functions.cyounne-search]
+verify_jwt = false
+
+[functions.cyounne-chat]
+verify_jwt = false
+
+[functions.cyounne-vision]
+verify_jwt = false
+
+[functions.cyounne-doc]
+verify_jwt = false
+
+[functions.cyounne-stt]
+verify_jwt = false
+
+[functions.cyounne-tts]
+verify_jwt = false
+
+[functions.cyounne-image-gen]
+verify_jwt = false
