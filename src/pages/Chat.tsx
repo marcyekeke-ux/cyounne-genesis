@@ -266,7 +266,11 @@ export default function Chat() {
   };
 
   const send = () => sendMessage(input);
-  const quickActions = isAdmin ? QUICK_ACTIONS_ADMIN : QUICK_ACTIONS_USER;
+  const lastAssistant = [...messages].reverse().find((m) => (m as any).role === "assistant") as Msg | undefined;
+  const dynamicSuggestions = buildSuggestions(lastAssistant, isAdmin);
+  const quickActions = messages.length === 0
+    ? (isAdmin ? QUICK_ACTIONS_ADMIN : QUICK_ACTIONS_USER)
+    : dynamicSuggestions;
 
   // Capacités Mode EMR — différenciées admin / pax
   const emrCapsUser = [
