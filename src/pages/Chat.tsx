@@ -139,6 +139,35 @@ export default function Chat() {
     setAvatarState("speaking");
     persistMessage(userMsg);
 
+    // Détection automatique d'une demande de photo / vidéo
+    const intent = detectMediaIntent(text);
+    if (intent) {
+      try {
+        const { data } = await supabase.functions.invoke("cyounne-search", {
+          body: { kind: intent.kind, query: intent.query },
+        });
+        const results = (data?.results ?? []) as MediaResult[];
+        const headline = results.length
+          ? (intent.kind === "video"
+              ? `Voici ce que j'ai trouvé en vidéo sur "${intent.query}". Je n'ai rien stocké, c'est en direct du web.`
+              : `Voici quelques images de "${intent.query}" trouvées sur le web. Je ne stocke rien, c'est cherché à la demande.`)
+          : `Je n'ai rien trouvé de probant sur "${intent.query}" pour le moment. Essayons une formulation différente ?`;
+        const reply: Msg = {
+          id: crypto.randomUUID(), role: "assistant", content: headline,
+          provider: results[0]?.source ?? "web",
+          media: results.length ? { kind: intent.kind, results } : undefined,
+        };
+        setMessages((p) => [...p, reply]);
+        persistMessage(reply);
+        if (!muted && voiceMode) await speak(reply.content, gender, supabase);
+      } catch (e: any) {
+        toast.error("Recherche web : " + (e?.message ?? "erreur"));
+      } finally {
+        setBusy(false); setAvatarState("idle");
+      }
+      return;
+    }
+
     try {
       const history = [...messages, userMsg]
         .filter((m): m is Msg => (m as any).role === "user" || (m as any).role === "assistant")
@@ -148,7 +177,7 @@ export default function Chat() {
         body: { messages: history, isAdmin, gender },
       });
       if (error) throw error;
-      const cleaned = clean(data?.content ?? "Aucune donnée exploitable disponible.");
+      const cleaned = clean(data?.content ?? "Je ne sais pas pour l'instant.");
       const reply: Msg = { id: crypto.randomUUID(), role: "assistant", content: cleaned, provider: data?.provider };
       setMessages((p) => [...p, reply]);
       persistMessage(reply);
@@ -156,7 +185,7 @@ export default function Chat() {
     } catch (e: any) {
       console.error(e);
       toast.error("Erreur Cyounne : " + (e?.message ?? ""));
-      setMessages((p) => [...p, { id: crypto.randomUUID(), role: "assistant", content: "Aucune donnée exploitable disponible." }]);
+      setMessages((p) => [...p, { id: crypto.randomUUID(), role: "assistant", content: "Je ne sais pas pour l'instant, réessayons dans un instant." }]);
     } finally {
       setBusy(false);
       setAvatarState("idle");
