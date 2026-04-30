@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invokeCyounneAdmin } from "@/lib/cyounneAdmin";
 import { Card } from "@/components/ui/card";
-import { Brain, Users, Bell, FileText, Activity, Shield, KeyRound, BookOpen, Lock, LogOut } from "lucide-react";
+import { Brain, Users, Bell, FileText, Activity, Shield, KeyRound, BookOpen, Lock, LogOut, Globe, Copy, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -119,11 +119,51 @@ export default function AdminDashboard() {
         })}
       </section>
 
+      <PublicUrlPanel />
+
       <Card className="glass p-6">
         <h2 className="font-display text-lg font-bold mb-2">Devise</h2>
         <p className="text-sm text-muted-foreground italic">« Analyser · Comprendre · Décider »</p>
-        <p className="text-xs text-muted-foreground mt-4">Cyounne — créée par Marcy-B EKEKE · 08 janvier 2022</p>
+        <p className="text-xs text-muted-foreground mt-4">Cyounne — créée par Monsieur ÉKÉKÉ · 08 janvier 2022</p>
       </Card>
     </div>
+  );
+}
+
+function PublicUrlPanel() {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const previewMatch = origin.match(/^https?:\/\/id-preview--([0-9a-f-]+)\.lovable\.app$/i);
+  const publishedUrl = previewMatch ? `https://${previewMatch[1]}.lovable.app` : origin;
+  const isPreview = !!previewMatch;
+  const copy = (url: string) => { navigator.clipboard.writeText(url); toast.success("URL copiée"); };
+
+  return (
+    <Card className="glass p-6 space-y-3">
+      <div className="flex items-center gap-2">
+        <Globe className="w-5 h-5 text-accent" />
+        <h2 className="font-display text-lg font-bold">URL publique de l'application</h2>
+      </div>
+      <p className="text-xs text-muted-foreground">Voici les liens d'accès à Cyounne. Partagez l'URL publiée à vos utilisateurs.</p>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-secondary/40 border border-border/50">
+          <span className="text-[10px] uppercase tracking-widest text-accent shrink-0">Publiée</span>
+          <code className="flex-1 text-xs font-mono truncate">{publishedUrl}</code>
+          <Button size="icon" variant="ghost" onClick={() => copy(publishedUrl)} title="Copier"><Copy className="w-4 h-4" /></Button>
+          <a href={publishedUrl} target="_blank" rel="noreferrer"><Button size="icon" variant="ghost" title="Ouvrir"><ExternalLink className="w-4 h-4" /></Button></a>
+        </div>
+        {isPreview && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-secondary/20 border border-border/40">
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground shrink-0">Preview</span>
+            <code className="flex-1 text-xs font-mono truncate">{origin}</code>
+            <Button size="icon" variant="ghost" onClick={() => copy(origin)} title="Copier"><Copy className="w-4 h-4" /></Button>
+          </div>
+        )}
+        <p className="text-[11px] text-muted-foreground">
+          {isPreview
+            ? "L'URL publiée devient active dès que vous cliquez sur Publier dans l'éditeur."
+            : "Cette URL est l'adresse actuelle de Cyounne en production."}
+        </p>
+      </div>
+    </Card>
   );
 }

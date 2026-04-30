@@ -10,27 +10,52 @@ import { useVoice, speak } from "@/hooks/useVoice";
 import {
   Mic, MicOff, Send, Volume2, VolumeX, Image as ImageIcon, Sparkles, Loader2, ShieldCheck,
   FileText, Paperclip, Stethoscope, Users as UsersIcon, Bell, BarChart3, Camera, FileCheck, Brain,
+  Copy, ThumbsUp, Share2, RefreshCw, Play,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-interface Msg { id: string; role: "user" | "assistant"; content: string; provider?: string; }
+interface MediaResult { url: string; thumb?: string; credit?: string; source?: string; videoId?: string; embed?: string; title?: string; channel?: string; }
+interface Msg { id: string; role: "user" | "assistant"; content: string; provider?: string; media?: { kind: "image" | "video"; results: MediaResult[] }; liked?: boolean; }
 type Step = { key: string; label: string; status: "pending" | "running" | "done" | "error"; detail?: string };
 interface ProgressMsg { id: string; role: "progress"; steps: Step[]; }
 type AnyMsg = Msg | ProgressMsg;
 
+function detectMediaIntent(text: string): { kind: "image" | "video"; query: string } | null {
+  const videoRe = /(?:envoi|envoie|montre|donne|cherche|trouve|donnez)[-\s]?(?:moi|nous)?\s+(?:la|une|des|le)?\s*(?:vid[ée]os?|clip|youtube)\s+(?:de|d['’]|sur|du|des|de la)\s+(.+)/i;
+  const imageRe = /(?:envoi|envoie|montre|donne|cherche|trouve|donnez)[-\s]?(?:moi|nous)?\s+(?:la|une|des|le)?\s*(?:photos?|images?|illustration)\s+(?:de|d['’]|sur|du|des|de la)\s+(.+)/i;
+  let m = text.match(videoRe);
+  if (m) return { kind: "video", query: m[1].replace(/[?!.,]+$/, "").trim() };
+  m = text.match(imageRe);
+  if (m) return { kind: "image", query: m[1].replace(/[?!.,]+$/, "").trim() };
+  return null;
+}
+
+function buildSuggestions(last: Msg | undefined, isAdmin: boolean): string[] {
+  if (!last || last.role !== "assistant") {
+    return isAdmin
+      ? ["Résumé du jour", "Stratégie de la semaine", "Coache-moi en négociation"]
+      : ["Raconte-moi EMR Genesis", "Donne-moi une citation de Branham", "Envoie-moi une photo de Sangmélima"];
+  }
+  const c = last.content.toLowerCase();
+  if (c.includes("paxage")) return ["Explique-moi les niveaux", "Comment devenir Mega Pax", "Avantages du Paxage"];
+  if (c.includes("citation") || c.includes("verset")) return ["Une autre du même auteur", "Une citation d'Escanor", "Un verset sur la foi"];
+  if (c.includes("conflit") || c.includes("négoci")) return ["Un exemple concret", "Et avec un client difficile", "Punchline style Harvey"];
+  return ["Approfondis", "Donne-moi un exemple", "Résume en 3 mots"];
+}
+
 const QUICK_ACTIONS_USER = [
   "Explique-moi EMR Genesis",
   "Comment fonctionne le Paxage ?",
-  "Quels sont les niveaux des membres ?",
+  "Envoie-moi une photo de Kinshasa",
+  "Une citation de Harvey Specter",
 ];
 
 const QUICK_ACTIONS_ADMIN = [
   "cyounne vision totale",
   "cyounne rapport reel",
-  "cyounne performance",
-  "cyounne risques",
   "cyounne strategie",
+  "Coache-moi en éloquence",
 ];
 
 function clean(text: string): string {
@@ -114,6 +139,35 @@ export default function Chat() {
     setAvatarState("speaking");
     persistMessage(userMsg);
 
+    // Détection automatique d'une demande de photo / vidéo
+    const intent = detectMediaIntent(text);
+    if (intent) {
+      try {
+        const { data } = await supabase.functions.invoke("cyounne-search", {
+          body: { kind: intent.kind, query: intent.query },
+        });
+        const results = (data?.results ?? []) as MediaResult[];
+        const headline = results.length
+          ? (intent.kind === "video"
+              ? `Voici ce que j'ai trouvé en vidéo sur "${intent.query}". Je n'ai rien stocké, c'est en direct du web.`
+              : `Voici quelques images de "${intent.query}" trouvées sur le web. Je ne stocke rien, c'est cherché à la demande.`)
+          : `Je n'ai rien trouvé de probant sur "${intent.query}" pour le moment. Essayons une formulation différente ?`;
+        const reply: Msg = {
+          id: crypto.randomUUID(), role: "assistant", content: headline,
+          provider: results[0]?.source ?? "web",
+          media: results.length ? { kind: intent.kind, results } : undefined,
+        };
+        setMessages((p) => [...p, reply]);
+        persistMessage(reply);
+        if (!muted && voiceMode) await speak(reply.content, gender, supabase);
+      } catch (e: any) {
+        toast.error("Recherche web : " + (e?.message ?? "erreur"));
+      } finally {
+        setBusy(false); setAvatarState("idle");
+      }
+      return;
+    }
+
     try {
       const history = [...messages, userMsg]
         .filter((m): m is Msg => (m as any).role === "user" || (m as any).role === "assistant")
@@ -123,7 +177,7 @@ export default function Chat() {
         body: { messages: history, isAdmin, gender },
       });
       if (error) throw error;
-      const cleaned = clean(data?.content ?? "Aucune donnée exploitable disponible.");
+      const cleaned = clean(data?.content ?? "Je ne sais pas pour l'instant.");
       const reply: Msg = { id: crypto.randomUUID(), role: "assistant", content: cleaned, provider: data?.provider };
       setMessages((p) => [...p, reply]);
       persistMessage(reply);
@@ -131,7 +185,7 @@ export default function Chat() {
     } catch (e: any) {
       console.error(e);
       toast.error("Erreur Cyounne : " + (e?.message ?? ""));
-      setMessages((p) => [...p, { id: crypto.randomUUID(), role: "assistant", content: "Aucune donnée exploitable disponible." }]);
+      setMessages((p) => [...p, { id: crypto.randomUUID(), role: "assistant", content: "Je ne sais pas pour l'instant, réessayons dans un instant." }]);
     } finally {
       setBusy(false);
       setAvatarState("idle");
@@ -212,7 +266,11 @@ export default function Chat() {
   };
 
   const send = () => sendMessage(input);
-  const quickActions = isAdmin ? QUICK_ACTIONS_ADMIN : QUICK_ACTIONS_USER;
+  const lastAssistant = [...messages].reverse().find((m) => (m as any).role === "assistant") as Msg | undefined;
+  const dynamicSuggestions = buildSuggestions(lastAssistant, isAdmin);
+  const quickActions = messages.length === 0
+    ? (isAdmin ? QUICK_ACTIONS_ADMIN : QUICK_ACTIONS_USER)
+    : dynamicSuggestions;
 
   // Capacités Mode EMR — différenciées admin / pax
   const emrCapsUser = [
@@ -301,15 +359,66 @@ export default function Chat() {
             );
           }
           const cm = m as Msg;
+          const isAssistant = cm.role === "assistant";
           return (
-            <div key={cm.id} className={cn("flex animate-fade-in", cm.role === "user" ? "justify-end" : "justify-start")}>
+            <div key={cm.id} className={cn("flex flex-col animate-fade-in gap-1.5", cm.role === "user" ? "items-end" : "items-start")}>
               <Card className={cn(
                 "max-w-[85%] md:max-w-[70%] px-4 py-3 text-sm leading-relaxed",
                 cm.role === "user" ? "bg-gradient-primary text-primary-foreground border-transparent shadow-elegant" : "glass",
               )}>
                 <div className="whitespace-pre-wrap">{cm.content}</div>
+                {cm.media && cm.media.results.length > 0 && (
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {cm.media.results.map((r, i) => cm.media!.kind === "image" ? (
+                      <a key={i} href={r.url} target="_blank" rel="noreferrer" className="block rounded-lg overflow-hidden border border-border/50 hover:border-accent transition">
+                        <img src={r.thumb || r.url} alt={r.credit ?? "image"} loading="lazy" className="w-full h-28 object-cover" />
+                        {r.credit && <div className="px-1.5 py-1 text-[9px] text-muted-foreground truncate">© {r.credit}</div>}
+                      </a>
+                    ) : (
+                      <a key={i} href={r.url} target="_blank" rel="noreferrer" className="block rounded-lg overflow-hidden border border-border/50 hover:border-accent transition relative group">
+                        <img src={r.thumb} alt={r.title ?? "video"} loading="lazy" className="w-full h-28 object-cover" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/30 group-hover:bg-background/10 transition">
+                          <Play className="w-7 h-7 text-white drop-shadow" />
+                        </div>
+                        <div className="px-1.5 py-1 text-[10px] truncate">{r.title}</div>
+                      </a>
+                    ))}
+                  </div>
+                )}
                 {cm.provider && <div className="mt-2 text-[10px] uppercase tracking-widest opacity-50">via {cm.provider}</div>}
               </Card>
+              {isAssistant && (
+                <div className="flex items-center gap-1 px-1 opacity-70 hover:opacity-100 transition">
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(cm.content); toast.success("Copié"); }}
+                    className="p-1.5 rounded-md hover:bg-secondary/60" title="Copier"
+                  ><Copy className="w-3.5 h-3.5" /></button>
+                  <button
+                    onClick={() => setMessages((p) => p.map((x) => x.id === cm.id && (x as any).role === "assistant" ? { ...(x as Msg), liked: !(x as Msg).liked } : x))}
+                    className={cn("p-1.5 rounded-md hover:bg-secondary/60", cm.liked && "text-accent")} title="J'aime"
+                  ><ThumbsUp className="w-3.5 h-3.5" /></button>
+                  <button
+                    onClick={async () => {
+                      const sharePayload = { title: "Cyounne", text: cm.content };
+                      if ((navigator as any).share) { try { await (navigator as any).share(sharePayload); } catch {} }
+                      else { navigator.clipboard.writeText(cm.content); toast.success("Texte copié pour partage"); }
+                    }}
+                    className="p-1.5 rounded-md hover:bg-secondary/60" title="Partager"
+                  ><Share2 className="w-3.5 h-3.5" /></button>
+                  <button
+                    onClick={() => {
+                      // Recherche dernier message user et regénère
+                      const idx = messages.findIndex((x) => x.id === cm.id);
+                      const prevUser = [...messages.slice(0, idx)].reverse().find((x) => (x as any).role === "user") as Msg | undefined;
+                      if (prevUser) {
+                        setMessages((p) => p.filter((x) => x.id !== cm.id));
+                        sendMessage(prevUser.content);
+                      }
+                    }}
+                    className="p-1.5 rounded-md hover:bg-secondary/60" title="Régénérer"
+                  ><RefreshCw className="w-3.5 h-3.5" /></button>
+                </div>
+              )}
             </div>
           );
         })}
