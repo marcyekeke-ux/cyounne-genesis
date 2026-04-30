@@ -10,14 +10,39 @@ import { useVoice, speak } from "@/hooks/useVoice";
 import {
   Mic, MicOff, Send, Volume2, VolumeX, Image as ImageIcon, Sparkles, Loader2, ShieldCheck,
   FileText, Paperclip, Stethoscope, Users as UsersIcon, Bell, BarChart3, Camera, FileCheck, Brain,
+  Copy, ThumbsUp, Share2, RefreshCw, Play,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-interface Msg { id: string; role: "user" | "assistant"; content: string; provider?: string; }
+interface MediaResult { url: string; thumb?: string; credit?: string; source?: string; videoId?: string; embed?: string; title?: string; channel?: string; }
+interface Msg { id: string; role: "user" | "assistant"; content: string; provider?: string; media?: { kind: "image" | "video"; results: MediaResult[] }; liked?: boolean; }
 type Step = { key: string; label: string; status: "pending" | "running" | "done" | "error"; detail?: string };
 interface ProgressMsg { id: string; role: "progress"; steps: Step[]; }
 type AnyMsg = Msg | ProgressMsg;
+
+function detectMediaIntent(text: string): { kind: "image" | "video"; query: string } | null {
+  const videoRe = /(?:envoi|envoie|montre|donne|cherche|trouve|donnez)[-\s]?(?:moi|nous)?\s+(?:la|une|des|le)?\s*(?:vid[ée]os?|clip|youtube)\s+(?:de|d['’]|sur|du|des|de la)\s+(.+)/i;
+  const imageRe = /(?:envoi|envoie|montre|donne|cherche|trouve|donnez)[-\s]?(?:moi|nous)?\s+(?:la|une|des|le)?\s*(?:photos?|images?|illustration)\s+(?:de|d['’]|sur|du|des|de la)\s+(.+)/i;
+  let m = text.match(videoRe);
+  if (m) return { kind: "video", query: m[1].replace(/[?!.,]+$/, "").trim() };
+  m = text.match(imageRe);
+  if (m) return { kind: "image", query: m[1].replace(/[?!.,]+$/, "").trim() };
+  return null;
+}
+
+function buildSuggestions(last: Msg | undefined, isAdmin: boolean): string[] {
+  if (!last || last.role !== "assistant") {
+    return isAdmin
+      ? ["Résumé du jour", "Stratégie de la semaine", "Coache-moi en négociation"]
+      : ["Raconte-moi EMR Genesis", "Donne-moi une citation de Branham", "Envoie-moi une photo de Sangmélima"];
+  }
+  const c = last.content.toLowerCase();
+  if (c.includes("paxage")) return ["Explique-moi les niveaux", "Comment devenir Mega Pax", "Avantages du Paxage"];
+  if (c.includes("citation") || c.includes("verset")) return ["Une autre du même auteur", "Une citation d'Escanor", "Un verset sur la foi"];
+  if (c.includes("conflit") || c.includes("négoci")) return ["Un exemple concret", "Et avec un client difficile", "Punchline style Harvey"];
+  return ["Approfondis", "Donne-moi un exemple", "Résume en 3 mots"];
+}
 
 const QUICK_ACTIONS_USER = [
   "Explique-moi EMR Genesis",
