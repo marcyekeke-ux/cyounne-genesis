@@ -1,4 +1,4 @@
-// Cyounne — analyse documents (PDF, Word, Excel, texte) — Lovable AI + Gemini direct fallback
+// Cyounne — analyse documents (PDF, Word, Excel, texte) — Cascade Lovable → Gemini → HF, journal interne.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -15,11 +15,47 @@ function clean(t: string): string {
     .replace(/\bMarcy-B\s+EKEKE\b/gi, "Monsieur ÉKÉKÉ");
 }
 
+async function logProvider(entry: {
+  provider: string;
+  status: "success" | "fail" | "timeout";
+  durationMs: number;
+  detail?: string;
+}) {
+  try {
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !key) return;
+    await fetch(`${url}/rest/v1/audit_log`, {
+      method: "POST",
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        action: "cyounne_doc_provider",
+        target: entry.provider,
+        details: { status: entry.status, durationMs: entry.durationMs, detail: entry.detail ?? null, ts: new Date().toISOString() },
+      }),
+    });
+  } catch (_) { /* silent */ }
+  console.log(`[provider-log] kind=doc provider=${entry.provider} status=${entry.status} ms=${entry.durationMs}${entry.detail ? " detail=" + entry.detail : ""}`);
+}
+
+async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return await Promise.race([
+    p,
+    new Promise<T>((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
+  ]);
+}
+
 async function tryLovableAI(fileBase64: string, mimeType: string, prompt: string): Promise<string | null> {
   const key = Deno.env.get("LOVABLE_API_KEY");
-  if (!key) return null;
+  const t0 = Date.now();
+  if (!key) { await logProvider({ provider: "lovable", status: "fail", durationMs: 0, detail: "no key" }); return null; }
   try {
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await withTimeout(fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -32,20 +68,27 @@ async function tryLovableAI(fileBase64: string, mimeType: string, prompt: string
           ],
         }],
       }),
-    });
-    if (!res.ok) { console.warn("LovableAI doc", res.status); return null; }
+    }), 25000);
+    if (!res.ok) { await logProvider({ provider: "lovable", status: "fail", durationMs: Date.now() - t0, detail: `http ${res.status}` }); return null; }
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content ?? "";
-    return text ? clean(text) : null;
-  } catch (e) { console.warn("LovableAI doc err", (e as Error).message); return null; }
+    if (!text) { await logProvider({ provider: "lovable", status: "fail", durationMs: Date.now() - t0, detail: "empty" }); return null; }
+    await logProvider({ provider: "lovable", status: "success", durationMs: Date.now() - t0 });
+    return clean(text);
+  } catch (e) {
+    const msg = (e as Error).message;
+    await logProvider({ provider: "lovable", status: msg === "timeout" ? "timeout" : "fail", durationMs: Date.now() - t0, detail: msg });
+    return null;
+  }
 }
 
 async function tryGeminiDirect(fileBase64: string, mimeType: string, prompt: string): Promise<string | null> {
   const key = Deno.env.get("GEMINI_API_KEY");
-  if (!key) return null;
+  const t0 = Date.now();
+  if (!key) { await logProvider({ provider: "gemini", status: "fail", durationMs: 0, detail: "no key" }); return null; }
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+    const res = await withTimeout(fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -53,12 +96,47 @@ async function tryGeminiDirect(fileBase64: string, mimeType: string, prompt: str
           contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: fileBase64 } }] }],
         }),
       },
-    );
-    if (!res.ok) return null;
+    ), 25000);
+    if (!res.ok) { await logProvider({ provider: "gemini", status: "fail", durationMs: Date.now() - t0, detail: `http ${res.status}` }); return null; }
     const data = await res.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-    return text ? clean(text) : null;
-  } catch { return null; }
+    if (!text) { await logProvider({ provider: "gemini", status: "fail", durationMs: Date.now() - t0, detail: "empty" }); return null; }
+    await logProvider({ provider: "gemini", status: "success", durationMs: Date.now() - t0 });
+    return clean(text);
+  } catch (e) {
+    const msg = (e as Error).message;
+    await logProvider({ provider: "gemini", status: msg === "timeout" ? "timeout" : "fail", durationMs: Date.now() - t0, detail: msg });
+    return null;
+  }
+}
+
+async function tryHuggingFace(fileBase64: string, mimeType: string): Promise<string | null> {
+  const key = Deno.env.get("HUGGINGFACE_API_KEY");
+  const t0 = Date.now();
+  if (!key) { await logProvider({ provider: "huggingface", status: "fail", durationMs: 0, detail: "no key" }); return null; }
+  // HF text fallback: only useful when we can decode text. For images-as-doc we caption.
+  try {
+    if (mimeType.startsWith("image/")) {
+      const bytes = Uint8Array.from(atob(fileBase64), (c) => c.charCodeAt(0));
+      const res = await withTimeout(fetch("https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": mimeType },
+        body: bytes,
+      }), 25000);
+      if (!res.ok) { await logProvider({ provider: "huggingface", status: "fail", durationMs: Date.now() - t0, detail: `http ${res.status}` }); return null; }
+      const data = await res.json();
+      const caption = Array.isArray(data) ? data[0]?.generated_text : data?.generated_text;
+      if (!caption) { await logProvider({ provider: "huggingface", status: "fail", durationMs: Date.now() - t0, detail: "empty" }); return null; }
+      await logProvider({ provider: "huggingface", status: "success", durationMs: Date.now() - t0 });
+      return `Aperçu : ${clean(caption)}`;
+    }
+    await logProvider({ provider: "huggingface", status: "fail", durationMs: Date.now() - t0, detail: "unsupported mime" });
+    return null;
+  } catch (e) {
+    const msg = (e as Error).message;
+    await logProvider({ provider: "huggingface", status: msg === "timeout" ? "timeout" : "fail", durationMs: Date.now() - t0, detail: msg });
+    return null;
+  }
 }
 
 Deno.serve(async (req) => {
@@ -70,11 +148,15 @@ Deno.serve(async (req) => {
     }
     const finalPrompt = prompt ?? `Tu es Cyounne de EMR Genesis. Analyse ce document (${fileName ?? "document"}) en français. Donne un résumé clair, les points clés, les chiffres importants, et toute anomalie. Texte naturel uniquement, pas de markdown.`;
 
-    let analysis = await tryLovableAI(fileBase64, mimeType, finalPrompt);
-    if (!analysis) analysis = await tryGeminiDirect(fileBase64, mimeType, finalPrompt);
+    let analysis: string | null = null;
+    let provider = "none";
+    analysis = await tryLovableAI(fileBase64, mimeType, finalPrompt);
+    if (analysis) provider = "lovable";
+    if (!analysis) { analysis = await tryGeminiDirect(fileBase64, mimeType, finalPrompt); if (analysis) provider = "gemini"; }
+    if (!analysis) { analysis = await tryHuggingFace(fileBase64, mimeType); if (analysis) provider = "huggingface"; }
     if (!analysis) analysis = "Je n'arrive pas à analyser ce document en ce moment. Réessaye dans un instant.";
 
-    return new Response(JSON.stringify({ analysis }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ analysis, provider }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("doc fatal", (e as Error).message);
     return new Response(JSON.stringify({ analysis: "Je n'arrive pas à analyser ce document en ce moment." }), {
