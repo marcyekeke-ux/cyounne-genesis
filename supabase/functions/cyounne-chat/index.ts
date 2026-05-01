@@ -60,14 +60,18 @@ async function fetchKnowledge(): Promise<string> {
     const url = Deno.env.get("SUPABASE_URL");
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY");
     if (!url || !key) return "";
-    const r = await fetch(`${url}/rest/v1/knowledge?select=category,title,content,tags,validated&order=created_at.desc&limit=200`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
+    // Tri: validées d'abord, puis plus récentes. Limite large pour couvrir toute la base admin.
+    const r = await fetch(`${url}/rest/v1/knowledge?select=category,title,content,tags,validated&order=validated.desc,created_at.desc&limit=500`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}`, "Cache-Control": "no-cache" },
     });
     if (!r.ok) return "";
     const rows = await r.json() as Array<{ category: string; title: string; content: string; tags?: string[]; validated?: boolean }>;
     if (!Array.isArray(rows) || rows.length === 0) return "";
-    const lines = rows.map((k) => `• [${k.category}] ${k.title} : ${k.content}${k.tags?.length ? ` (tags: ${k.tags.join(", ")})` : ""}`);
-    return `\n\nCONNAISSANCES OFFICIELLES (PRIORITÉ ABSOLUE — utilise CES informations en premier avant toute autre source) :\n${lines.join("\n")}\n`;
+    const lines = rows.map((k) => `• [${k.category}${k.validated ? " ✓" : ""}] ${k.title} : ${k.content}${k.tags?.length ? ` (tags: ${k.tags.join(", ")})` : ""}`);
+    return `\n\nCONNAISSANCES OFFICIELLES (PRIORITÉ ABSOLUE — règle inviolable) :
+Avant chaque réponse tu DOIS d'abord chercher la réponse dans cette liste. Si une information y figure (anniversaire, événement, valeur, contact, fait EMR Genesis, citation officielle…), utilise EXACTEMENT cette donnée et cite-la naturellement. Ne contredis jamais une entrée validée (✓). Ne dis pas "je ne sais pas" tant que tu n'as pas vérifié ici.
+${lines.join("\n")}
+`;
   } catch (e) {
     console.warn("knowledge fetch failed", (e as Error).message);
     return "";
