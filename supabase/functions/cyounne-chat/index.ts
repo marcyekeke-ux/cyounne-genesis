@@ -147,27 +147,48 @@ Deno.serve(async (req) => {
       ...messages,
     ];
 
+    // Cascade 3s par provider — basculement instantané (Groq→Gemini→Mistral→HF)
+    const logProv = async (provider: string, status: string, ms: number, detail?: string) => {
+      try {
+        const url = Deno.env.get("SUPABASE_URL");
+        const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+        if (!url || !key) return;
+        await fetch(`${url}/rest/v1/audit_log`, {
+          method: "POST",
+          headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+          body: JSON.stringify({ action: "cyounne_chat_provider", target: provider, details: { status, ms, detail: detail ?? null } }),
+        });
+      } catch (_) {}
+      console.log(`[provider-log] kind=chat provider=${provider} status=${status} ms=${ms}${detail ? " detail=" + detail : ""}`);
+    };
+
     let lastError: any = null;
     for (const p of PROVIDERS) {
+      const t0 = Date.now();
       try {
         const ctl = new AbortController();
-        const t = setTimeout(() => ctl.abort(), 8000);
+        const t = setTimeout(() => ctl.abort(), 3000); // 3s switch — règle absolue
         try {
           const result = await callProvider(p, fullMessages, ctl.signal);
           clearTimeout(t);
+          await logProv(p.name, "success", Date.now() - t0);
           return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         } finally { clearTimeout(t); }
       } catch (e) {
-        console.warn(`Provider ${p.name} failed:`, (e as Error).message);
+        const msg = (e as Error).message;
+        await logProv(p.name, msg.includes("abort") ? "timeout" : "fail", Date.now() - t0, msg);
         lastError = e;
       }
     }
 
     // Final fallback: HuggingFace
+    const t0 = Date.now();
     try {
       const result = await callHuggingFace(fullMessages);
+      await logProv("huggingface", "success", Date.now() - t0);
       return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } catch (e) {
+      await logProv("huggingface", "fail", Date.now() - t0, (e as Error).message);
       lastError = e;
     }
 
