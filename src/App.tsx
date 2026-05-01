@@ -15,6 +15,7 @@ import AdminMembers from "./pages/admin/AdminMembers.tsx";
 import AdminAlerts from "./pages/admin/AdminAlerts.tsx";
 import AdminReports from "./pages/admin/AdminReports.tsx";
 import AdminWhatsApp from "./pages/admin/AdminWhatsApp.tsx";
+import AdminSettings from "./pages/admin/AdminSettings.tsx";
 import { ProtectedRoute } from "./components/cyounne/ProtectedRoute.tsx";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
           <Route path="/admin/alerts" element={<ProtectedRoute adminOnly><AdminAlerts /></ProtectedRoute>} />
           <Route path="/admin/whatsapp" element={<ProtectedRoute adminOnly><AdminWhatsApp /></ProtectedRoute>} />
           <Route path="/admin/reports" element={<ProtectedRoute adminOnly><AdminReports /></ProtectedRoute>} />
+          <Route path="/admin/settings" element={<ProtectedRoute adminOnly><AdminSettings /></ProtectedRoute>} />
           {/* catch-all */}
           <Route path="*" element={<NotFound />} />
         </Routes>

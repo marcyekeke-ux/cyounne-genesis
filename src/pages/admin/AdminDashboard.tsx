@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invokeCyounneAdmin } from "@/lib/cyounneAdmin";
 import { Card } from "@/components/ui/card";
-import { Brain, Users, Bell, FileText, Activity, Shield, KeyRound, BookOpen, Lock, LogOut, Globe, Copy, ExternalLink } from "lucide-react";
+import { Brain, Users, Bell, FileText, Activity, Shield, KeyRound, BookOpen, Lock, LogOut, Globe, Copy, ExternalLink, Settings, MessageCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -84,6 +84,9 @@ export default function AdminDashboard() {
     { label: "Conversations", value: stats.conversations, icon: Activity, to: "/chat", color: "from-emerald-500 to-teal-400" },
     { label: "Connaissances", value: stats.knowledge, icon: BookOpen, to: "/admin/knowledge", color: "from-amber-500 to-yellow-400" },
     { label: "Médias", value: stats.media, icon: KeyRound, to: "/admin/media", color: "from-indigo-500 to-blue-400" },
+    { label: "Clés API", value: 0, icon: Shield, to: "/admin/api-keys", color: "from-pink-500 to-rose-400" },
+    { label: "WhatsApp", value: 0, icon: MessageCircle, to: "/admin/whatsapp", color: "from-green-500 to-emerald-400" },
+    { label: "Paramètres & Rôles", value: 0, icon: Settings, to: "/admin/settings", color: "from-slate-500 to-zinc-400" },
   ];
 
   return (
