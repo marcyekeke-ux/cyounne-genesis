@@ -22,8 +22,28 @@ Deno.serve(async (req) => {
     const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
     if (!isAdmin) return new Response(JSON.stringify({ error: "admin only" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    const { title, message, url, player_ids, segments } = await req.json();
+    const { title, message, url, player_ids, segments, target } = await req.json();
     if (!title || !message) return new Response(JSON.stringify({ error: "title + message required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    // Ciblage par segment Cyounne : all | active | at_risk
+    let resolvedPlayerIds: string[] | null = null;
+    if (!player_ids?.length && target && target !== "all") {
+      // Récupère les membres correspondant au segment
+      let q = supabase.from("members").select("user_id, status, trust_score");
+      if (target === "active") q = q.eq("status", "actif");
+      else if (target === "at_risk") q = q.lt("trust_score", 60);
+      const { data: mbs } = await q;
+      const userIds = (mbs ?? []).map((m: any) => m.user_id).filter(Boolean);
+      if (userIds.length) {
+        const { data: subs } = await supabase
+          .from("push_subscriptions")
+          .select("player_id")
+          .in("user_id", userIds);
+        resolvedPlayerIds = (subs ?? []).map((s: any) => s.player_id).filter(Boolean);
+      } else {
+        resolvedPlayerIds = [];
+      }
+    }
 
     const { data: row } = await supabase.from("api_keys").select("extra_config, api_key, enabled").eq("service", "onesignal").maybeSingle();
     if (!row || !row.enabled) return new Response(JSON.stringify({ error: "OneSignal désactivé" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
