@@ -60,6 +60,12 @@ Deno.serve(async (req) => {
     };
     if (url) payload.url = url;
     if (player_ids?.length) payload.include_player_ids = player_ids;
+    else if (resolvedPlayerIds !== null) {
+      if (resolvedPlayerIds.length === 0) {
+        return new Response(JSON.stringify({ ok: true, id: null, recipients: 0, note: `Aucun abonné pour le segment ${target}` }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      payload.include_player_ids = resolvedPlayerIds;
+    }
     else payload.included_segments = segments?.length ? segments : ["Subscribed Users"];
 
     const res = await fetch("https://onesignal.com/api/v1/notifications", {
