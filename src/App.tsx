@@ -16,6 +16,8 @@ import AdminAlerts from "./pages/admin/AdminAlerts.tsx";
 import AdminReports from "./pages/admin/AdminReports.tsx";
 import AdminWhatsApp from "./pages/admin/AdminWhatsApp.tsx";
 import AdminSettings from "./pages/admin/AdminSettings.tsx";
+import AdminTrends from "./pages/admin/AdminTrends.tsx";
+import Embed from "./pages/Embed.tsx";
 import { ProtectedRoute } from "./components/cyounne/ProtectedRoute.tsx";
 
 const queryClient = new QueryClient();
