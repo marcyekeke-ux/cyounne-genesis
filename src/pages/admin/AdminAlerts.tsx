@@ -52,7 +52,7 @@ export default function AdminAlerts() {
     setPushBusy(true);
     try {
       const { data, error } = await supabase.functions.invoke("send-push", {
-        body: { title: title ?? pushTitle, message: message ?? pushMsg, url: pushUrl || undefined },
+        body: { title: title ?? pushTitle, message: message ?? pushMsg, url: pushUrl || undefined, target },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
