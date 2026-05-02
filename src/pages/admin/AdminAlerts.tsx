@@ -14,12 +14,19 @@ const LEVEL_META: Record<string, { icon: any; cls: string; label: string }> = {
   grave: { icon: AlertOctagon, cls: "text-destructive", label: "Niveau 3 — Grave" },
 };
 
+const SEGMENTS = [
+  { id: "all", label: "Tous les abonnés" },
+  { id: "active", label: "Membres actifs" },
+  { id: "at_risk", label: "Membres à risque (trust < 60)" },
+];
+
 export default function AdminAlerts() {
   const [rows, setRows] = useState<any[]>([]);
   const [pushTitle, setPushTitle] = useState("Alerte Cyounne");
   const [pushMsg, setPushMsg] = useState("");
   const [pushUrl, setPushUrl] = useState("");
   const [pushBusy, setPushBusy] = useState(false);
+  const [target, setTarget] = useState<string>("all");
   const [subs, setSubs] = useState<number>(0);
 
   const load = async () => {
