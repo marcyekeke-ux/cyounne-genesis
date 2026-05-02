@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     if (!res.ok) {
       return new Response(JSON.stringify({ error: data?.errors?.[0] ?? "OneSignal error", details: data }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    await supabase.from("audit_log").insert({ user_id: user.id, action: "push_sent", target: "onesignal", details: { title, message, recipients: data.recipients ?? null } });
+    await supabase.from("audit_log").insert({ user_id: user.id, action: "push_sent", target: target || "all", details: { title, message, recipients: data.recipients ?? null, segment: target || "all" } });
     return new Response(JSON.stringify({ ok: true, id: data.id, recipients: data.recipients }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
