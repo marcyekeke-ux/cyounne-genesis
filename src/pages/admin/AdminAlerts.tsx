@@ -14,12 +14,19 @@ const LEVEL_META: Record<string, { icon: any; cls: string; label: string }> = {
   grave: { icon: AlertOctagon, cls: "text-destructive", label: "Niveau 3 — Grave" },
 };
 
+const SEGMENTS = [
+  { id: "all", label: "Tous les abonnés" },
+  { id: "active", label: "Membres actifs" },
+  { id: "at_risk", label: "Membres à risque (trust < 60)" },
+];
+
 export default function AdminAlerts() {
   const [rows, setRows] = useState<any[]>([]);
   const [pushTitle, setPushTitle] = useState("Alerte Cyounne");
   const [pushMsg, setPushMsg] = useState("");
   const [pushUrl, setPushUrl] = useState("");
   const [pushBusy, setPushBusy] = useState(false);
+  const [target, setTarget] = useState<string>("all");
   const [subs, setSubs] = useState<number>(0);
 
   const load = async () => {
@@ -45,7 +52,7 @@ export default function AdminAlerts() {
     setPushBusy(true);
     try {
       const { data, error } = await supabase.functions.invoke("send-push", {
-        body: { title: title ?? pushTitle, message: message ?? pushMsg, url: pushUrl || undefined },
+        body: { title: title ?? pushTitle, message: message ?? pushMsg, url: pushUrl || undefined, target },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
@@ -78,13 +85,26 @@ export default function AdminAlerts() {
           <Input placeholder="URL d'ouverture (optionnel)" value={pushUrl} onChange={(e) => setPushUrl(e.target.value)} className="md:col-span-2" />
         </div>
         <Textarea placeholder="Message à diffuser..." value={pushMsg} onChange={(e) => setPushMsg(e.target.value)} className="min-h-[80px]" />
+        <div className="flex flex-wrap gap-2">
+          <span className="text-xs text-muted-foreground self-center mr-1">Cible :</span>
+          {SEGMENTS.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setTarget(s.id)}
+              className={`text-xs px-3 py-1 rounded-full border transition-all ${target === s.id ? "bg-gradient-primary text-primary-foreground border-transparent" : "bg-secondary/40 border-border/50 hover:bg-secondary/60"}`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
         <div className="flex gap-2 justify-end">
           <Button variant="outline" disabled={pushBusy} onClick={() => sendPush("Test Cyounne", "Ceci est un test de notification.")}>
             Test
           </Button>
           <Button disabled={pushBusy || !pushMsg} onClick={() => sendPush()} className="bg-gradient-primary">
             {pushBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
-            Envoyer à tous
+            Envoyer · {SEGMENTS.find(s => s.id === target)?.label}
           </Button>
         </div>
       </Card>
