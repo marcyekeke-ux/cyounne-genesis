@@ -149,12 +149,20 @@ Deno.serve(async (req) => {
     }
 
     if (action === "verify") {
-      const ok = await verifyToken(token);
-      return json({ ok });
+      const v = await verifyToken(token);
+      return json({ ok: v.ok, role: v.role });
     }
 
     // ── Toutes les autres actions exigent un jeton valide ──────────────────
-    if (!(await verifyToken(token))) return json({ error: "Session admin expirée ou invalide" }, 401);
+    const auth = await verifyToken(token);
+    if (!auth.ok) return json({ error: "Session admin expirée ou invalide" }, 401);
+    const role = auth.role!;
+
+    // Actions admin-only (clés API, import, stats globales, audit, storage)
+    const ADMIN_ONLY = new Set(["key_status", "import_keys", "storage_upload"]);
+    if (ADMIN_ONLY.has(action) && role !== "admin") {
+      return json({ error: `action ${action} réservée à l'administrateur` }, 403);
+    }
 
     const sb = admin();
 
