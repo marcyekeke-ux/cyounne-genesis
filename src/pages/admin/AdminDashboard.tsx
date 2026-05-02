@@ -87,6 +87,7 @@ export default function AdminDashboard() {
     { label: "Clés API", value: 0, icon: Shield, to: "/admin/api-keys", color: "from-pink-500 to-rose-400" },
     { label: "WhatsApp", value: 0, icon: MessageCircle, to: "/admin/whatsapp", color: "from-green-500 to-emerald-400" },
     { label: "Paramètres & Rôles", value: 0, icon: Settings, to: "/admin/settings", color: "from-slate-500 to-zinc-400" },
+    { label: "Tendances & Prédictions", value: 0, icon: TrendingUp, to: "/admin/trends", color: "from-fuchsia-500 to-purple-400" },
   ];
 
   return (
