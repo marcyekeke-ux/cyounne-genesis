@@ -42,6 +42,8 @@ const App = () => (
           <Route path="/admin/whatsapp" element={<ProtectedRoute adminOnly><AdminWhatsApp /></ProtectedRoute>} />
           <Route path="/admin/reports" element={<ProtectedRoute adminOnly><AdminReports /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute adminOnly><AdminSettings /></ProtectedRoute>} />
+          <Route path="/admin/trends" element={<ProtectedRoute adminOnly><AdminTrends /></ProtectedRoute>} />
+          <Route path="/embed" element={<Embed />} />
           {/* catch-all */}
           <Route path="*" element={<NotFound />} />
         </Routes>
