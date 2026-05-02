@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invokeCyounneAdmin } from "@/lib/cyounneAdmin";
 import { Card } from "@/components/ui/card";
-import { Brain, Users, Bell, FileText, Activity, Shield, KeyRound, BookOpen, Lock, LogOut, Globe, Copy, ExternalLink, Settings, MessageCircle } from "lucide-react";
+import { Brain, Users, Bell, FileText, Activity, Shield, KeyRound, BookOpen, Lock, LogOut, Globe, Copy, ExternalLink, Settings, MessageCircle, TrendingUp, Code2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
