@@ -51,22 +51,48 @@ async function verifyToken(token: string | undefined | null): Promise<boolean> {
   return expected === sig;
 }
 
-// Liste blanche pour les opérations génériques sur les tables (couvre tout l’admin Cyounne)
-const ALLOWED_TABLES = new Set([
-  "api_keys",
-  "knowledge",
-  "media_assets",
-  "members",
-  "alerts",
-  "reports",
-  "conversations",
-  "messages",
-  "user_roles",
-  "audit_log",
-  "push_subscriptions",
-  "whatsapp_messages",
-  "profiles",
-]);
+// Permissions strictes par rôle — la gateway service-role n'expose que ces tables.
+// admin = Monsieur ÉKÉKÉ (clé maître via mot de passe). team_leader = gestion limitée. pax = lecture profil.
+type Op = "select" | "insert" | "update" | "upsert" | "delete";
+const ROLE_TABLE_ACL: Record<string, Partial<Record<string, Op[]>>> = {
+  admin: {
+    api_keys: ["select", "insert", "update", "upsert", "delete"],
+    knowledge: ["select", "insert", "update", "upsert", "delete"],
+    media_assets: ["select", "insert", "update", "upsert", "delete"],
+    members: ["select", "insert", "update", "upsert", "delete"],
+    alerts: ["select", "insert", "update", "upsert", "delete"],
+    reports: ["select", "insert", "update", "upsert", "delete"],
+    conversations: ["select", "insert", "update", "upsert", "delete"],
+    messages: ["select", "insert", "update", "upsert", "delete"],
+    user_roles: ["select", "insert", "update", "upsert", "delete"],
+    audit_log: ["select", "insert"],
+    push_subscriptions: ["select", "insert", "delete"],
+    whatsapp_messages: ["select", "insert", "update", "delete"],
+    profiles: ["select", "update"],
+  },
+  team_leader: {
+    members: ["select", "update"],
+    knowledge: ["select"],
+    media_assets: ["select"],
+    alerts: ["select", "insert", "update"],
+    reports: ["select"],
+    profiles: ["select"],
+  },
+  pax: {
+    knowledge: ["select"],
+    media_assets: ["select"],
+    profiles: ["select"],
+  },
+};
+
+function aclCheck(role: string, table: string, op: Op): { ok: boolean; reason?: string } {
+  const tables = ROLE_TABLE_ACL[role];
+  if (!tables) return { ok: false, reason: `rôle inconnu: ${role}` };
+  const ops = tables[table];
+  if (!ops) return { ok: false, reason: `table interdite pour ${role}: ${table}` };
+  if (!ops.includes(op)) return { ok: false, reason: `opération ${op} interdite sur ${table} pour ${role}` };
+  return { ok: true };
+}
 
 // Mapping clés admin → noms de secrets / lignes api_keys (`service`)
 type KeyDef = { name: string; secret?: string; service?: string; field?: "api_key" | string; jsonPath?: string[] };
