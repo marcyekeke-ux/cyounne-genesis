@@ -35,38 +35,75 @@ async function hmac(message: string): Promise<string> {
   return btoa(String.fromCharCode(...new Uint8Array(sig)));
 }
 
-async function issueToken(): Promise<string> {
+async function issueToken(role: string = "admin"): Promise<string> {
   const exp = Date.now() + TOKEN_TTL_MS;
-  const payload = `cyounne-admin.${exp}`;
+  const payload = `cyounne-admin.${role}.${exp}`;
   const sig = await hmac(payload);
-  return `${exp}.${sig}`;
+  return `${role}.${exp}.${sig}`;
 }
 
-async function verifyToken(token: string | undefined | null): Promise<boolean> {
-  if (!token) return false;
-  const [expStr, sig] = token.split(".");
+async function verifyToken(token: string | undefined | null): Promise<{ ok: boolean; role?: string }> {
+  if (!token) return { ok: false };
+  const parts = token.split(".");
+  // Rétro-compat: ancien format `${exp}.${sig}` → admin
+  if (parts.length === 2) {
+    const [expStr, sig] = parts;
+    const exp = Number(expStr);
+    if (!exp || Number.isNaN(exp) || exp < Date.now()) return { ok: false };
+    const expected = await hmac(`cyounne-admin.${exp}`);
+    return expected === sig ? { ok: true, role: "admin" } : { ok: false };
+  }
+  if (parts.length !== 3) return { ok: false };
+  const [role, expStr, sig] = parts;
   const exp = Number(expStr);
-  if (!exp || Number.isNaN(exp) || exp < Date.now()) return false;
-  const expected = await hmac(`cyounne-admin.${exp}`);
-  return expected === sig;
+  if (!exp || Number.isNaN(exp) || exp < Date.now()) return { ok: false };
+  if (!ROLE_TABLE_ACL[role]) return { ok: false };
+  const expected = await hmac(`cyounne-admin.${role}.${exp}`);
+  return expected === sig ? { ok: true, role } : { ok: false };
 }
 
-// Liste blanche pour les opérations génériques sur les tables (couvre tout l’admin Cyounne)
-const ALLOWED_TABLES = new Set([
-  "api_keys",
-  "knowledge",
-  "media_assets",
-  "members",
-  "alerts",
-  "reports",
-  "conversations",
-  "messages",
-  "user_roles",
-  "audit_log",
-  "push_subscriptions",
-  "whatsapp_messages",
-  "profiles",
-]);
+// Permissions strictes par rôle — la gateway service-role n'expose que ces tables.
+// admin = Monsieur ÉKÉKÉ (clé maître via mot de passe). team_leader = gestion limitée. pax = lecture profil.
+type Op = "select" | "insert" | "update" | "upsert" | "delete";
+const ROLE_TABLE_ACL: Record<string, Partial<Record<string, Op[]>>> = {
+  admin: {
+    api_keys: ["select", "insert", "update", "upsert", "delete"],
+    knowledge: ["select", "insert", "update", "upsert", "delete"],
+    media_assets: ["select", "insert", "update", "upsert", "delete"],
+    members: ["select", "insert", "update", "upsert", "delete"],
+    alerts: ["select", "insert", "update", "upsert", "delete"],
+    reports: ["select", "insert", "update", "upsert", "delete"],
+    conversations: ["select", "insert", "update", "upsert", "delete"],
+    messages: ["select", "insert", "update", "upsert", "delete"],
+    user_roles: ["select", "insert", "update", "upsert", "delete"],
+    audit_log: ["select", "insert"],
+    push_subscriptions: ["select", "insert", "delete"],
+    whatsapp_messages: ["select", "insert", "update", "delete"],
+    profiles: ["select", "update"],
+  },
+  team_leader: {
+    members: ["select", "update"],
+    knowledge: ["select"],
+    media_assets: ["select"],
+    alerts: ["select", "insert", "update"],
+    reports: ["select"],
+    profiles: ["select"],
+  },
+  pax: {
+    knowledge: ["select"],
+    media_assets: ["select"],
+    profiles: ["select"],
+  },
+};
+
+function aclCheck(role: string, table: string, op: Op): { ok: boolean; reason?: string } {
+  const tables = ROLE_TABLE_ACL[role];
+  if (!tables) return { ok: false, reason: `rôle inconnu: ${role}` };
+  const ops = tables[table];
+  if (!ops) return { ok: false, reason: `table interdite pour ${role}: ${table}` };
+  if (!ops.includes(op)) return { ok: false, reason: `opération ${op} interdite sur ${table} pour ${role}` };
+  return { ok: true };
+}
 
 // Mapping clés admin → noms de secrets / lignes api_keys (`service`)
 type KeyDef = { name: string; secret?: string; service?: string; field?: "api_key" | string; jsonPath?: string[] };
@@ -112,12 +149,20 @@ Deno.serve(async (req) => {
     }
 
     if (action === "verify") {
-      const ok = await verifyToken(token);
-      return json({ ok });
+      const v = await verifyToken(token);
+      return json({ ok: v.ok, role: v.role });
     }
 
     // ── Toutes les autres actions exigent un jeton valide ──────────────────
-    if (!(await verifyToken(token))) return json({ error: "Session admin expirée ou invalide" }, 401);
+    const auth = await verifyToken(token);
+    if (!auth.ok) return json({ error: "Session admin expirée ou invalide" }, 401);
+    const role = auth.role!;
+
+    // Actions admin-only (clés API, import, stats globales, audit, storage)
+    const ADMIN_ONLY = new Set(["key_status", "import_keys", "storage_upload"]);
+    if (ADMIN_ONLY.has(action) && role !== "admin") {
+      return json({ error: `action ${action} réservée à l'administrateur` }, 403);
+    }
 
     const sb = admin();
 
@@ -199,7 +244,8 @@ Deno.serve(async (req) => {
     // ── Operations CRUD sécurisées sur tables admin ────────────────────────
     if (action === "select") {
       const { table, columns = "*", filters = {}, order, limit } = body;
-      if (!ALLOWED_TABLES.has(table)) return json({ error: `table interdite: ${table}` }, 400);
+      const c = aclCheck(role, table, "select");
+      if (!c.ok) return json({ error: c.reason }, 403);
       let q = sb.from(table).select(columns);
       for (const [k, v] of Object.entries(filters)) q = q.eq(k, v);
       if (order) q = q.order(order.column, { ascending: order.ascending !== false });
@@ -211,7 +257,8 @@ Deno.serve(async (req) => {
 
     if (action === "insert") {
       const { table, values } = body;
-      if (!ALLOWED_TABLES.has(table)) return json({ error: `table interdite: ${table}` }, 400);
+      const c = aclCheck(role, table, "insert");
+      if (!c.ok) return json({ error: c.reason }, 403);
       const { data, error } = await sb.from(table).insert(values).select();
       if (error) return json({ error: error.message }, 400);
       return json({ data });
@@ -219,7 +266,8 @@ Deno.serve(async (req) => {
 
     if (action === "update") {
       const { table, values, match } = body;
-      if (!ALLOWED_TABLES.has(table)) return json({ error: `table interdite: ${table}` }, 400);
+      const c = aclCheck(role, table, "update");
+      if (!c.ok) return json({ error: c.reason }, 403);
       let q = sb.from(table).update(values);
       for (const [k, v] of Object.entries(match ?? {})) q = q.eq(k, v);
       const { data, error } = await q.select();
@@ -229,7 +277,8 @@ Deno.serve(async (req) => {
 
     if (action === "upsert") {
       const { table, values, onConflict } = body;
-      if (!ALLOWED_TABLES.has(table)) return json({ error: `table interdite: ${table}` }, 400);
+      const c = aclCheck(role, table, "upsert");
+      if (!c.ok) return json({ error: c.reason }, 403);
       const { data, error } = await sb.from(table).upsert(values, onConflict ? { onConflict } : undefined).select();
       if (error) return json({ error: error.message }, 400);
       return json({ data });
@@ -237,7 +286,8 @@ Deno.serve(async (req) => {
 
     if (action === "delete") {
       const { table, match } = body;
-      if (!ALLOWED_TABLES.has(table)) return json({ error: `table interdite: ${table}` }, 400);
+      const c = aclCheck(role, table, "delete");
+      if (!c.ok) return json({ error: c.reason }, 403);
       let q = sb.from(table).delete();
       for (const [k, v] of Object.entries(match ?? {})) q = q.eq(k, v);
       const { error } = await q;
