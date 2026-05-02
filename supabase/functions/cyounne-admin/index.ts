@@ -35,20 +35,31 @@ async function hmac(message: string): Promise<string> {
   return btoa(String.fromCharCode(...new Uint8Array(sig)));
 }
 
-async function issueToken(): Promise<string> {
+async function issueToken(role: string = "admin"): Promise<string> {
   const exp = Date.now() + TOKEN_TTL_MS;
-  const payload = `cyounne-admin.${exp}`;
+  const payload = `cyounne-admin.${role}.${exp}`;
   const sig = await hmac(payload);
-  return `${exp}.${sig}`;
+  return `${role}.${exp}.${sig}`;
 }
 
-async function verifyToken(token: string | undefined | null): Promise<boolean> {
-  if (!token) return false;
-  const [expStr, sig] = token.split(".");
+async function verifyToken(token: string | undefined | null): Promise<{ ok: boolean; role?: string }> {
+  if (!token) return { ok: false };
+  const parts = token.split(".");
+  // Rétro-compat: ancien format `${exp}.${sig}` → admin
+  if (parts.length === 2) {
+    const [expStr, sig] = parts;
+    const exp = Number(expStr);
+    if (!exp || Number.isNaN(exp) || exp < Date.now()) return { ok: false };
+    const expected = await hmac(`cyounne-admin.${exp}`);
+    return expected === sig ? { ok: true, role: "admin" } : { ok: false };
+  }
+  if (parts.length !== 3) return { ok: false };
+  const [role, expStr, sig] = parts;
   const exp = Number(expStr);
-  if (!exp || Number.isNaN(exp) || exp < Date.now()) return false;
-  const expected = await hmac(`cyounne-admin.${exp}`);
-  return expected === sig;
+  if (!exp || Number.isNaN(exp) || exp < Date.now()) return { ok: false };
+  if (!ROLE_TABLE_ACL[role]) return { ok: false };
+  const expected = await hmac(`cyounne-admin.${role}.${exp}`);
+  return expected === sig ? { ok: true, role } : { ok: false };
 }
 
 // Permissions strictes par rôle — la gateway service-role n'expose que ces tables.
