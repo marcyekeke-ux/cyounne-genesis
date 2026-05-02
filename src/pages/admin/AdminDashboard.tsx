@@ -168,6 +168,31 @@ function PublicUrlPanel() {
             : "Cette URL est l'adresse actuelle de Cyounne en production."}
         </p>
       </div>
+
+      <div className="pt-4 border-t border-border/40 space-y-2">
+        <div className="flex items-center gap-2">
+          <Code2 className="w-4 h-4 text-accent" />
+          <h3 className="font-display font-bold text-sm">Intégration EMR Genesis (auto-sync)</h3>
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Colle cette URL ou ce snippet dans ton application Genesis. Toute modification de Cyounne ici se reflète immédiatement là-bas, sans redéploiement.
+        </p>
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-secondary/40 border border-border/50">
+          <span className="text-[10px] uppercase tracking-widest text-accent shrink-0">Embed URL</span>
+          <code className="flex-1 text-xs font-mono truncate">{publishedUrl}/embed</code>
+          <Button size="icon" variant="ghost" onClick={() => copy(`${publishedUrl}/embed`)} title="Copier"><Copy className="w-4 h-4" /></Button>
+          <a href={`${publishedUrl}/embed`} target="_blank" rel="noreferrer"><Button size="icon" variant="ghost" title="Ouvrir"><ExternalLink className="w-4 h-4" /></Button></a>
+        </div>
+        <div className="p-3 rounded-lg bg-secondary/20 border border-border/40">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Snippet iframe</span>
+            <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => copy(`<iframe src="${publishedUrl}/embed" allow="microphone; camera; clipboard-write" style="width:100%;height:100%;border:0;border-radius:16px" title="Cyounne"></iframe>`)}>
+              <Copy className="w-3 h-3 mr-1" /> Copier
+            </Button>
+          </div>
+          <code className="block text-[10px] font-mono whitespace-pre-wrap break-all text-muted-foreground">{`<iframe src="${publishedUrl}/embed" allow="microphone; camera; clipboard-write" style="width:100%;height:100%;border:0;border-radius:16px" title="Cyounne"></iframe>`}</code>
+        </div>
+      </div>
     </Card>
   );
 }
