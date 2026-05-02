@@ -244,7 +244,8 @@ Deno.serve(async (req) => {
     // ── Operations CRUD sécurisées sur tables admin ────────────────────────
     if (action === "select") {
       const { table, columns = "*", filters = {}, order, limit } = body;
-      if (!ALLOWED_TABLES.has(table)) return json({ error: `table interdite: ${table}` }, 400);
+      const c = aclCheck(role, table, "select");
+      if (!c.ok) return json({ error: c.reason }, 403);
       let q = sb.from(table).select(columns);
       for (const [k, v] of Object.entries(filters)) q = q.eq(k, v);
       if (order) q = q.order(order.column, { ascending: order.ascending !== false });
@@ -256,7 +257,8 @@ Deno.serve(async (req) => {
 
     if (action === "insert") {
       const { table, values } = body;
-      if (!ALLOWED_TABLES.has(table)) return json({ error: `table interdite: ${table}` }, 400);
+      const c = aclCheck(role, table, "insert");
+      if (!c.ok) return json({ error: c.reason }, 403);
       const { data, error } = await sb.from(table).insert(values).select();
       if (error) return json({ error: error.message }, 400);
       return json({ data });
@@ -264,7 +266,8 @@ Deno.serve(async (req) => {
 
     if (action === "update") {
       const { table, values, match } = body;
-      if (!ALLOWED_TABLES.has(table)) return json({ error: `table interdite: ${table}` }, 400);
+      const c = aclCheck(role, table, "update");
+      if (!c.ok) return json({ error: c.reason }, 403);
       let q = sb.from(table).update(values);
       for (const [k, v] of Object.entries(match ?? {})) q = q.eq(k, v);
       const { data, error } = await q.select();
@@ -274,7 +277,8 @@ Deno.serve(async (req) => {
 
     if (action === "upsert") {
       const { table, values, onConflict } = body;
-      if (!ALLOWED_TABLES.has(table)) return json({ error: `table interdite: ${table}` }, 400);
+      const c = aclCheck(role, table, "upsert");
+      if (!c.ok) return json({ error: c.reason }, 403);
       const { data, error } = await sb.from(table).upsert(values, onConflict ? { onConflict } : undefined).select();
       if (error) return json({ error: error.message }, 400);
       return json({ data });
@@ -282,7 +286,8 @@ Deno.serve(async (req) => {
 
     if (action === "delete") {
       const { table, match } = body;
-      if (!ALLOWED_TABLES.has(table)) return json({ error: `table interdite: ${table}` }, 400);
+      const c = aclCheck(role, table, "delete");
+      if (!c.ok) return json({ error: c.reason }, 403);
       let q = sb.from(table).delete();
       for (const [k, v] of Object.entries(match ?? {})) q = q.eq(k, v);
       const { error } = await q;
