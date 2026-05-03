@@ -4,7 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Image as ImageIcon, Upload, Trash2, Loader2 } from "lucide-react";
+import { Image as ImageIcon, Upload, Trash2, Loader2, Cloud } from "lucide-react";
+import { MediaUploader } from "@/components/cyounne/MediaUploader";
 
 const CATEGORIES = ["mr_ekeke", "logo_emr", "membres", "videos_officielles", "musiques_emr", "documents", "autres"];
 
@@ -94,6 +95,32 @@ export default function AdminMedia() {
             </Button>
           </div>
         </div>
+      </Card>
+
+      <Card className="glass p-5 space-y-3">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Cloud className="w-4 h-4 text-accent" /> Cloudinary signé — aperçu immédiat
+        </div>
+        <p className="text-xs text-muted-foreground">Choisis catégorie et label ci-dessus, puis téléverse. Le fichier part direct vers Cloudinary et l'URL est enregistrée dans media_assets.</p>
+        <MediaUploader
+          folder={category}
+          onUploaded={async (r) => {
+            try {
+              await invokeCyounneAdmin("insert", {
+                table: "media_assets",
+                values: {
+                  category,
+                  label: label || r.public_id,
+                  url: r.secure_url,
+                  mime_type: (r.resource_type === "video" ? "video/" : "image/") + r.format,
+                  metadata: { provider: "cloudinary", public_id: r.public_id, bytes: r.bytes, width: r.width, height: r.height, duration: r.duration },
+                },
+              });
+              setLabel("");
+              load();
+            } catch (e: any) { toast.error(e?.message); }
+          }}
+        />
       </Card>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">

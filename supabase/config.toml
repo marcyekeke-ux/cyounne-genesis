@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.cyounne-image-gen]
 verify_jwt = false
+
+[functions.cyounne-cloudinary]
+verify_jwt = false
