@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_events: {
+        Row: {
+          app_connection_id: string | null
+          created_at: string
+          description: string | null
+          event_type: string
+          handled: boolean
+          id: string
+          payload: Json
+          severity: string
+          title: string
+        }
+        Insert: {
+          app_connection_id?: string | null
+          created_at?: string
+          description?: string | null
+          event_type: string
+          handled?: boolean
+          id?: string
+          payload?: Json
+          severity?: string
+          title: string
+        }
+        Update: {
+          app_connection_id?: string | null
+          created_at?: string
+          description?: string | null
+          event_type?: string
+          handled?: boolean
+          id?: string
+          payload?: Json
+          severity?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_events_app_connection_id_fkey"
+            columns: ["app_connection_id"]
+            isOneToOne: false
+            referencedRelation: "app_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       alerts: {
         Row: {
           created_at: string
@@ -82,6 +126,54 @@ export type Database = {
           service?: string
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      app_connections: {
+        Row: {
+          app_type: string
+          created_at: string
+          enabled: boolean
+          id: string
+          last_sync_at: string | null
+          last_sync_status: string | null
+          name: string
+          schema_cache: Json
+          service_role_key: string | null
+          supabase_anon_key: string
+          supabase_url: string
+          table_mapping: Json
+          updated_at: string
+        }
+        Insert: {
+          app_type?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_sync_at?: string | null
+          last_sync_status?: string | null
+          name: string
+          schema_cache?: Json
+          service_role_key?: string | null
+          supabase_anon_key: string
+          supabase_url: string
+          table_mapping?: Json
+          updated_at?: string
+        }
+        Update: {
+          app_type?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_sync_at?: string | null
+          last_sync_status?: string | null
+          name?: string
+          schema_cache?: Json
+          service_role_key?: string | null
+          supabase_anon_key?: string
+          supabase_url?: string
+          table_mapping?: Json
+          updated_at?: string
         }
         Relationships: []
       }

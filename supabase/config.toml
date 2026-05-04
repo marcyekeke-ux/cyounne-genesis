@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.cyounne-cloudinary]
 verify_jwt = false
+
+[functions.cyounne-watcher]
+verify_jwt = false
