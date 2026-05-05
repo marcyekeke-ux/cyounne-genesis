@@ -47,7 +47,7 @@ export default function AdminTontineRules() {
       supabase.from("tontine_rules" as any).select("*").order("created_at", { ascending: false }),
     ]);
     setConns((c as Conn[]) ?? []);
-    setRules((r as Rule[]) ?? []);
+    setRules(((r as unknown) as Rule[]) ?? []);
     setLoading(false);
   };
 

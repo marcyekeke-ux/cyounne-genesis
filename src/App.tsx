@@ -18,6 +18,7 @@ import AdminWhatsApp from "./pages/admin/AdminWhatsApp.tsx";
 import AdminSettings from "./pages/admin/AdminSettings.tsx";
 import AdminTrends from "./pages/admin/AdminTrends.tsx";
 import AdminSyncApps from "./pages/admin/AdminSyncApps.tsx";
+import AdminTontineRules from "./pages/admin/AdminTontineRules.tsx";
 import Embed from "./pages/Embed.tsx";
 import { ProtectedRoute } from "./components/cyounne/ProtectedRoute.tsx";
 
@@ -45,6 +46,7 @@ const App = () => (
           <Route path="/admin/settings" element={<ProtectedRoute adminOnly><AdminSettings /></ProtectedRoute>} />
           <Route path="/admin/trends" element={<ProtectedRoute adminOnly><AdminTrends /></ProtectedRoute>} />
           <Route path="/admin/sync-apps" element={<ProtectedRoute adminOnly><AdminSyncApps /></ProtectedRoute>} />
+          <Route path="/admin/tontine-rules" element={<ProtectedRoute adminOnly><AdminTontineRules /></ProtectedRoute>} />
           <Route path="/embed" element={<Embed />} />
           {/* catch-all */}
           <Route path="*" element={<NotFound />} />
