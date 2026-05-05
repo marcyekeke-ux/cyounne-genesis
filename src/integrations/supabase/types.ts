@@ -491,6 +491,104 @@ export type Database = {
         }
         Relationships: []
       }
+      tontine_actions: {
+        Row: {
+          action_type: string
+          app_connection_id: string | null
+          created_at: string
+          details: Json
+          id: string
+          rule_id: string | null
+          status: string
+          target_ref: string | null
+        }
+        Insert: {
+          action_type: string
+          app_connection_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          rule_id?: string | null
+          status?: string
+          target_ref?: string | null
+        }
+        Update: {
+          action_type?: string
+          app_connection_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          rule_id?: string | null
+          status?: string
+          target_ref?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tontine_actions_app_connection_id_fkey"
+            columns: ["app_connection_id"]
+            isOneToOne: false
+            referencedRelation: "app_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tontine_actions_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "tontine_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tontine_rules: {
+        Row: {
+          app_connection_id: string
+          block_policy: Json
+          congrats_policy: Json
+          created_at: string
+          enabled: boolean
+          id: string
+          late_fee_formula: Json
+          name: string
+          receipt_policy: Json
+          table_mapping: Json
+          updated_at: string
+        }
+        Insert: {
+          app_connection_id: string
+          block_policy?: Json
+          congrats_policy?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          late_fee_formula?: Json
+          name: string
+          receipt_policy?: Json
+          table_mapping?: Json
+          updated_at?: string
+        }
+        Update: {
+          app_connection_id?: string
+          block_policy?: Json
+          congrats_policy?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          late_fee_formula?: Json
+          name?: string
+          receipt_policy?: Json
+          table_mapping?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tontine_rules_app_connection_id_fkey"
+            columns: ["app_connection_id"]
+            isOneToOne: false
+            referencedRelation: "app_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string

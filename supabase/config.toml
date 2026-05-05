@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.cyounne-watcher]
 verify_jwt = false
+
+[functions.cyounne-tontine]
+verify_jwt = false
