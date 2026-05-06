@@ -74,7 +74,7 @@ async function emitEvent(app_id: string | null, type: string, title: string, sev
   } catch (_) {}
 }
 
-async function runEngineForRule(rule: Rule, conn: Conn) {
+async function runEngineForRule(rule: Rule, conn: AppConn) {
   const map = rule.table_mapping || {};
   const t_contrib = map.contributions || "contributions";
   const t_members = map.members || "members";
@@ -87,21 +87,15 @@ async function runEngineForRule(rule: Rule, conn: Conn) {
   // 1) Frais de retard sur cotisations en retard non réglées
   try {
     const today = new Date();
-    const { data: lateRows, error } = await r
-      .from(t_contrib)
-      .select("*")
-      .eq("status", "late")
-      .is("late_fee_applied_at", null)
-      .limit(500);
+    const { data: lateRows, error } = await r.select(t_contrib, { filters: { status: "late" }, limit: 500 });
+    if (error) throw new Error(error);
 
-    if (error) throw error;
-
-    for (const row of lateRows ?? []) {
+    for (const row of (lateRows ?? []).filter((x: any) => !x.late_fee_applied_at)) {
       const due = row.due_date ? new Date(row.due_date) : null;
       const daysLate = due ? Math.max(0, Math.floor((today.getTime() - due.getTime()) / 86400000)) : 0;
       const fee = computeLateFee(rule.late_fee_formula, daysLate, Number(row.amount || 0));
       if (fee > 0) {
-        const ins = await r.from(t_fees).insert({
+        const ins = await r.insert(t_fees, {
           contribution_id: row.id,
           member_id: row.member_id,
           amount: fee,
@@ -109,8 +103,8 @@ async function runEngineForRule(rule: Rule, conn: Conn) {
           rule_id: rule.id,
           created_at: new Date().toISOString(),
         });
-        if (ins.error) throw ins.error;
-        await r.from(t_contrib).update({ late_fee_applied_at: new Date().toISOString(), late_fee_amount: fee }).eq("id", row.id);
+        if (ins.error) throw new Error(ins.error);
+        await r.update(t_contrib, { id: row.id }, { late_fee_applied_at: new Date().toISOString(), late_fee_amount: fee });
         summary.late_fees++;
         await logAction(rule.id, conn.id, "late_fee_applied", String(row.id), "ok", { fee, daysLate });
       }
@@ -126,12 +120,13 @@ async function runEngineForRule(rule: Rule, conn: Conn) {
     const threshold = Number(policy.after_late_count || 3);
     const action = String(policy.action || "alert_only");
 
-    const { data: members } = await r.from(t_members).select("id, full_name, late_count, status").gte("late_count", threshold).limit(500);
-    for (const m of members ?? []) {
+    const { data: allMembers } = await r.select(t_members, { limit: 500 });
+    const members = (allMembers ?? []).filter((m: any) => Number(m.late_count || 0) >= threshold);
+    for (const m of members) {
       if (action === "block_all") {
-        await r.from(t_members).update({ status: "blocked", blocked_at: new Date().toISOString(), blocked_by_rule: rule.id }).eq("id", m.id);
+        await r.update(t_members, { id: m.id }, { status: "blocked", blocked_at: new Date().toISOString(), blocked_by_rule: rule.id });
       } else if (action === "skip_next") {
-        await r.from(t_members).update({ skip_next_payout: true }).eq("id", m.id);
+        await r.update(t_members, { id: m.id }, { skip_next_payout: true });
       }
       await emitEvent(conn.id, "tontine_block", `Pax en retard: ${m.full_name}`, action === "alert_only" ? "info" : "warn",
         `${m.late_count} retards — action: ${action}`, { member_id: m.id });
@@ -151,13 +146,14 @@ async function runEngineForRule(rule: Rule, conn: Conn) {
       const target = new Date();
       target.setDate(target.getDate() + daysBefore);
       const ymd = target.toISOString().slice(0, 10);
-      const { data: payouts } = await r.from(t_payouts).select("id, member_id, payout_date, congrats_sent_at").eq("payout_date", ymd).is("congrats_sent_at", null).limit(200);
-      for (const p of payouts ?? []) {
-        const { data: m } = await r.from(t_members).select("id, full_name, phone").eq("id", p.member_id).maybeSingle();
+      const { data: payouts } = await r.select(t_payouts, { filters: { payout_date: ymd }, limit: 200 });
+      for (const p of (payouts ?? []).filter((x: any) => !x.congrats_sent_at)) {
+        const { data: ms } = await r.select(t_members, { filters: { id: p.member_id }, limit: 1 });
+        const m = ms?.[0];
         const name = m?.full_name || "Pax";
         const text = String(cp.template || "Yoh {name} 🎉 Demain c'est ta sortie tontine.").replace("{name}", name);
         await emitEvent(conn.id, "tontine_congrats", `Félicitations préparées pour ${name}`, "info", text, { payout_id: p.id, channel: cp.channel || "all" });
-        await r.from(t_payouts).update({ congrats_sent_at: new Date().toISOString() }).eq("id", p.id);
+        await r.update(t_payouts, { id: p.id }, { congrats_sent_at: new Date().toISOString() });
         await logAction(rule.id, conn.id, "congrats_sent", String(p.id), "ok", { name, channel: cp.channel });
         summary.congrats++;
       }
@@ -167,13 +163,13 @@ async function runEngineForRule(rule: Rule, conn: Conn) {
     await emitEvent(conn.id, "tontine_congrats_error", "Erreur félicitations", "warn", (e as Error).message);
   }
 
-  // 4) Reçus PDF (marqueurs — la génération réelle est faite par cyounne-doc à la demande)
+  // 4) Reçus PDF
   try {
     const rp = rule.receipt_policy || {};
     if (rp.enabled && rp.auto_send) {
-      const { data: payouts } = await r.from(t_payouts).select("id, member_id").eq("status", "completed").is("receipt_generated_at", null).limit(200);
-      for (const p of payouts ?? []) {
-        await r.from(t_payouts).update({ receipt_generated_at: new Date().toISOString(), receipt_pending: true }).eq("id", p.id);
+      const { data: payouts } = await r.select(t_payouts, { filters: { status: "completed" }, limit: 200 });
+      for (const p of (payouts ?? []).filter((x: any) => !x.receipt_generated_at)) {
+        await r.update(t_payouts, { id: p.id }, { receipt_generated_at: new Date().toISOString(), receipt_pending: true });
         await logAction(rule.id, conn.id, "receipt_generated", String(p.id), "ok", { include_qr: !!rp.include_qr });
         summary.receipts++;
       }
