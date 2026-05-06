@@ -35,9 +35,8 @@ function admin() {
   );
 }
 
-function remote(conn: Conn) {
-  const key = conn.service_role_key || conn.supabase_anon_key;
-  return createClient(conn.supabase_url, key);
+function remote(conn: AppConn) {
+  return buildRemote(conn);
 }
 
 function computeLateFee(formula: any, daysLate: number, baseAmount = 0): number {
