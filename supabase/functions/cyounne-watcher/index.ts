@@ -1,6 +1,7 @@
 // Cyounne Watcher — Agent autonome multi-apps
 // Inspecte les bases Supabase connectées, détecte le schéma, journalise les événements.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { buildRemote } from "../_shared/remoteApp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,19 +51,27 @@ async function logEvent(db: any, appId: string | null, type: string, sev: string
 }
 
 async function syncOne(db: any, conn: any) {
-  const tables = await probeRemoteTables(conn.supabase_url, conn.supabase_anon_key);
+  const remote = buildRemote(conn);
+  let tables: string[] = [];
+  let pingInfo: any = null;
+  try {
+    tables = await remote.listTables();
+    pingInfo = await remote.ping();
+  } catch (e) {
+    pingInfo = { ok: false, error: (e as Error).message };
+  }
   const appType = conn.app_type === "unknown" ? inferAppType(tables) : conn.app_type;
-  const status = tables.length > 0 ? "ok" : "no_tables";
+  const status = (tables.length > 0 || pingInfo?.ok) ? "ok" : "no_tables";
 
   await db.from("app_connections").update({
     app_type: appType,
-    schema_cache: { tables, scanned_at: new Date().toISOString() },
+    schema_cache: { tables, scanned_at: new Date().toISOString(), mode: conn.connection_mode || "supabase", ping: pingInfo },
     last_sync_at: new Date().toISOString(),
     last_sync_status: status,
   }).eq("id", conn.id);
 
   await logEvent(db, conn.id, "sync", status === "ok" ? "info" : "warn",
-    `Sync ${conn.name}`, `${tables.length} tables détectées (type: ${appType})`, { tables });
+    `Sync ${conn.name}`, `${tables.length} tables détectées (type: ${appType}, mode: ${conn.connection_mode || "supabase"})`, { tables, ping: pingInfo });
 
   return { id: conn.id, name: conn.name, app_type: appType, tables: tables.length, status };
 }

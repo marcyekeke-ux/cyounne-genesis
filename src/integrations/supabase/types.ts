@@ -132,46 +132,58 @@ export type Database = {
       app_connections: {
         Row: {
           app_type: string
+          connection_mode: string
           created_at: string
           enabled: boolean
+          endpoint_header_name: string | null
+          endpoint_key: string | null
+          endpoint_url: string | null
           id: string
           last_sync_at: string | null
           last_sync_status: string | null
           name: string
           schema_cache: Json
           service_role_key: string | null
-          supabase_anon_key: string
-          supabase_url: string
+          supabase_anon_key: string | null
+          supabase_url: string | null
           table_mapping: Json
           updated_at: string
         }
         Insert: {
           app_type?: string
+          connection_mode?: string
           created_at?: string
           enabled?: boolean
+          endpoint_header_name?: string | null
+          endpoint_key?: string | null
+          endpoint_url?: string | null
           id?: string
           last_sync_at?: string | null
           last_sync_status?: string | null
           name: string
           schema_cache?: Json
           service_role_key?: string | null
-          supabase_anon_key: string
-          supabase_url: string
+          supabase_anon_key?: string | null
+          supabase_url?: string | null
           table_mapping?: Json
           updated_at?: string
         }
         Update: {
           app_type?: string
+          connection_mode?: string
           created_at?: string
           enabled?: boolean
+          endpoint_header_name?: string | null
+          endpoint_key?: string | null
+          endpoint_url?: string | null
           id?: string
           last_sync_at?: string | null
           last_sync_status?: string | null
           name?: string
           schema_cache?: Json
           service_role_key?: string | null
-          supabase_anon_key?: string
-          supabase_url?: string
+          supabase_anon_key?: string | null
+          supabase_url?: string | null
           table_mapping?: Json
           updated_at?: string
         }
