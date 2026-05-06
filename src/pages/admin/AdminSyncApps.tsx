@@ -120,11 +120,23 @@ export default function AdminSyncApps() {
 
       <Card className="p-4 space-y-3">
         <h2 className="font-semibold">Ajouter une application</h2>
-        <div className="grid md:grid-cols-3 gap-2">
-          <Input placeholder="Nom (ex: Genesis Tontines)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <Input placeholder="https://xxx.supabase.co" value={form.supabase_url} onChange={(e) => setForm({ ...form, supabase_url: e.target.value })} />
-          <Input placeholder="anon key" value={form.supabase_anon_key} onChange={(e) => setForm({ ...form, supabase_anon_key: e.target.value })} />
+        <div className="flex gap-2 flex-wrap">
+          <Button size="sm" variant={form.mode === "edge_proxy" ? "default" : "outline"} onClick={() => setForm({ ...form, mode: "edge_proxy" })}>Edge proxy (cyounne-agent)</Button>
+          <Button size="sm" variant={form.mode === "supabase" ? "default" : "outline"} onClick={() => setForm({ ...form, mode: "supabase" })}>Supabase direct</Button>
         </div>
+        <Input placeholder="Nom (ex: EMR Tontines)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        {form.mode === "edge_proxy" ? (
+          <div className="grid md:grid-cols-3 gap-2">
+            <Input placeholder="https://xxx.supabase.co/functions/v1/cyounne-agent" value={form.endpoint_url} onChange={(e) => setForm({ ...form, endpoint_url: e.target.value })} />
+            <Input placeholder="x-cyounne-key (clé)" value={form.endpoint_key} onChange={(e) => setForm({ ...form, endpoint_key: e.target.value })} />
+            <Input placeholder="Header (def: x-cyounne-key)" value={form.endpoint_header_name} onChange={(e) => setForm({ ...form, endpoint_header_name: e.target.value })} />
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-2">
+            <Input placeholder="https://xxx.supabase.co" value={form.supabase_url} onChange={(e) => setForm({ ...form, supabase_url: e.target.value })} />
+            <Input placeholder="anon key" value={form.supabase_anon_key} onChange={(e) => setForm({ ...form, supabase_anon_key: e.target.value })} />
+          </div>
+        )}
         <Button onClick={addConn}><Plus className="w-4 h-4 mr-2" />Connecter</Button>
       </Card>
 
@@ -140,7 +152,7 @@ export default function AdminSyncApps() {
                 <Badge variant="secondary">{c.app_type}</Badge>
                 {c.last_sync_status && <Badge variant={c.last_sync_status === "ok" ? "default" : "destructive"}>{c.last_sync_status}</Badge>}
               </div>
-              <p className="text-xs text-muted-foreground truncate">{c.supabase_url}</p>
+              <p className="text-xs text-muted-foreground truncate">{c.connection_mode === "edge_proxy" ? c.endpoint_url : c.supabase_url}</p>
               <p className="text-xs text-muted-foreground">
                 {c.schema_cache?.tables?.length ?? 0} tables · {c.last_sync_at ? new Date(c.last_sync_at).toLocaleString() : "jamais scanné"}
               </p>
