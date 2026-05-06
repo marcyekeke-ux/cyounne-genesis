@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
       if (!rule) throw new Error("Règle introuvable");
       const { data: conn } = await sb.from("app_connections").select("*").eq("id", rule.app_connection_id).maybeSingle();
       if (!conn) throw new Error("Connexion app introuvable");
-      const summary = await runEngineForRule(rule as Rule, conn as Conn);
+      const summary = await runEngineForRule(rule as Rule, conn as AppConn);
       return new Response(JSON.stringify({ ok: true, summary }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -205,7 +205,7 @@ Deno.serve(async (req) => {
         const { data: conn } = await sb.from("app_connections").select("*").eq("id", rule.app_connection_id).maybeSingle();
         if (!conn) continue;
         try {
-          const summary = await runEngineForRule(rule as Rule, conn as Conn);
+          const summary = await runEngineForRule(rule as Rule, conn as AppConn);
           out.push({ rule_id: rule.id, summary });
         } catch (e) {
           out.push({ rule_id: rule.id, error: (e as Error).message });
