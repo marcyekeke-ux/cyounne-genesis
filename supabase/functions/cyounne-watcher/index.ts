@@ -65,13 +65,13 @@ async function syncOne(db: any, conn: any) {
 
   await db.from("app_connections").update({
     app_type: appType,
-    schema_cache: { tables, scanned_at: new Date().toISOString() },
+    schema_cache: { tables, scanned_at: new Date().toISOString(), mode: conn.connection_mode || "supabase", ping: pingInfo },
     last_sync_at: new Date().toISOString(),
     last_sync_status: status,
   }).eq("id", conn.id);
 
   await logEvent(db, conn.id, "sync", status === "ok" ? "info" : "warn",
-    `Sync ${conn.name}`, `${tables.length} tables détectées (type: ${appType})`, { tables });
+    `Sync ${conn.name}`, `${tables.length} tables détectées (type: ${appType}, mode: ${conn.connection_mode || "supabase"})`, { tables, ping: pingInfo });
 
   return { id: conn.id, name: conn.name, app_type: appType, tables: tables.length, status };
 }
