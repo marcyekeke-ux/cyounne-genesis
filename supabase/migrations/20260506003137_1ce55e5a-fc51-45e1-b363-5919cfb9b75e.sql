@@ -1,0 +1,1 @@
+UPDATE public.app_connections SET service_role_key = 'DppSEXWYTjqjRnxf32JjCNDk-N9GHDQHqQoK99n9j--a38nPUrMZAJRWOTEigHjw', updated_at = now() WHERE id = 'c72dd6b3-f8d9-411b-a71d-751ab8f9822a';
