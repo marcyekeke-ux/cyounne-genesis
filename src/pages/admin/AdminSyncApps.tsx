@@ -16,6 +16,9 @@ type Conn = {
   last_sync_at: string | null;
   last_sync_status: string | null;
   schema_cache: any;
+  connection_mode?: string | null;
+  endpoint_url?: string | null;
+  endpoint_header_name?: string | null;
 };
 
 type Event = {
@@ -33,7 +36,15 @@ export default function AdminSyncApps() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", supabase_url: "", supabase_anon_key: "" });
+  const [form, setForm] = useState({
+    name: "",
+    mode: "edge_proxy" as "edge_proxy" | "supabase",
+    supabase_url: "",
+    supabase_anon_key: "",
+    endpoint_url: "",
+    endpoint_key: "",
+    endpoint_header_name: "x-cyounne-key",
+  });
 
   const load = async () => {
     setLoading(true);
@@ -55,14 +66,19 @@ export default function AdminSyncApps() {
   }, []);
 
   const addConn = async () => {
-    if (!form.name || !form.supabase_url || !form.supabase_anon_key) {
-      toast.error("Tous les champs sont requis");
-      return;
+    if (!form.name) { toast.error("Le nom est requis"); return; }
+    let payload: any = { name: form.name, connection_mode: form.mode };
+    if (form.mode === "edge_proxy") {
+      if (!form.endpoint_url || !form.endpoint_key) { toast.error("Endpoint et clé requis"); return; }
+      payload = { ...payload, endpoint_url: form.endpoint_url, endpoint_key: form.endpoint_key, endpoint_header_name: form.endpoint_header_name || "x-cyounne-key", supabase_url: null, supabase_anon_key: null };
+    } else {
+      if (!form.supabase_url || !form.supabase_anon_key) { toast.error("URL Supabase et clé anon requises"); return; }
+      payload = { ...payload, supabase_url: form.supabase_url, supabase_anon_key: form.supabase_anon_key };
     }
-    const { error } = await supabase.from("app_connections").insert(form as any);
+    const { error } = await supabase.from("app_connections").insert(payload);
     if (error) { toast.error(error.message); return; }
     toast.success("Application ajoutée. Lancement du scan…");
-    setForm({ name: "", supabase_url: "", supabase_anon_key: "" });
+    setForm({ name: "", mode: "edge_proxy", supabase_url: "", supabase_anon_key: "", endpoint_url: "", endpoint_key: "", endpoint_header_name: "x-cyounne-key" });
     await load();
     await scanAll();
   };
