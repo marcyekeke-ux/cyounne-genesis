@@ -11,7 +11,7 @@ type Conn = {
   id: string;
   name: string;
   app_type: string;
-  supabase_url: string;
+  supabase_url: string | null;
   enabled: boolean;
   last_sync_at: string | null;
   last_sync_status: string | null;
