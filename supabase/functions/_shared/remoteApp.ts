@@ -74,12 +74,12 @@ class SupabaseDirectClient implements RemoteApp {
 class EdgeProxyClient implements RemoteApp {
   mode = "edge_proxy" as const;
   constructor(private conn: AppConn) {}
-  private async call(action: string, params: any = {}) {
+  private async call(op: string, params: any = {}) {
     const headerName = this.conn.endpoint_header_name || "x-cyounne-key";
     const r = await fetch(this.conn.endpoint_url!, {
       method: "POST",
       headers: { "Content-Type": "application/json", [headerName]: this.conn.endpoint_key || "" },
-      body: JSON.stringify({ action, ...params }),
+      body: JSON.stringify({ op, ...params }),
     });
     const text = await r.text();
     let json: any = {};
@@ -99,6 +99,11 @@ class EdgeProxyClient implements RemoteApp {
   async update(table: string, match: Record<string, any>, patch: any) {
     const res = await this.call("update", { table, match, patch });
     return { error: res.error };
+  }
+  async describe(table: string) {
+    const res = await this.call("describe_table", { table });
+    if (res.error) return { columns: [], sample: null };
+    return { columns: res.columns || [], sample: res.sample };
   }
   async listTables() {
     const res = await this.call("list_tables", {});
