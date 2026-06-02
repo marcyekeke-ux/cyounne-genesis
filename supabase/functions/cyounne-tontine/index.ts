@@ -6,6 +6,7 @@
 //               groups(versement_journalier, gain, statut)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { buildRemote, type AppConn } from "../_shared/remoteApp.ts";
+import { buildTontineMessage, type Gender } from "../_shared/tontineMessages.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
