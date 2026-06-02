@@ -224,6 +224,11 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ fee }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (action === "preview_message") {
+      const message = buildTontineMessage(body.kind, body.ctx || {});
+      return new Response(JSON.stringify({ message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     return new Response(JSON.stringify({ error: "action inconnue" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("cyounne-tontine error", e);
