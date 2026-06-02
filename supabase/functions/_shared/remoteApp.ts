@@ -85,6 +85,7 @@ class EdgeProxyClient implements RemoteApp {
     let json: any = {};
     try { json = text ? JSON.parse(text) : {}; } catch { json = { raw: text }; }
     if (!r.ok) return { error: json?.error || `HTTP ${r.status}`, data: null };
+    if (json && json.ok === false) return { error: json.error || "remote error", data: null };
     return json;
   }
   async select(table: string, opts: any = {}) {
