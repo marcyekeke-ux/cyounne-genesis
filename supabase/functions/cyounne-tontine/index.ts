@@ -94,12 +94,17 @@ async function runEngineForRule(rule: Rule, conn: AppConn) {
 
     // 1a) Calcul frais de retard par versement (log seulement, pas d'écriture distante)
     for (const [pax_id, vers] of byPax) {
+      const { data: profs0 } = await r.select(t_profiles, { filters: { id: pax_id }, limit: 1 });
+      const p0 = profs0?.[0];
+      const name0 = p0 ? `${p0.prenom || ""} ${p0.nom || ""}`.trim() : pax_id;
+      const gender0 = (p0?.genre || p0?.sexe || "unknown") as Gender;
       for (const v of vers) {
         const target = `versement:${v.id}`;
         if (await alreadyDone(rule.id, "late_fee_applied", target)) continue;
         const fee = computeLateFee(rule.late_fee_formula, v.daysLate, Number(v.montant || 0));
         if (fee > 0) {
-          await logAction(rule.id, conn.id, "late_fee_applied", target, "ok", { fee, daysLate: v.daysLate, pax_id, montant: v.montant });
+          const message = buildTontineMessage("fee_applied", { name: name0, gender: gender0, fee, days_late: v.daysLate, amount: Number(v.montant || 0) });
+          await logAction(rule.id, conn.id, "late_fee_applied", target, "ok", { fee, daysLate: v.daysLate, pax_id, montant: v.montant, message });
           summary.late_fees++;
         }
       }
