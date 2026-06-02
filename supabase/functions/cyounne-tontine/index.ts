@@ -150,10 +150,11 @@ async function runEngineForRule(rule: Rule, conn: AppConn) {
         const { data: profs } = await r.select(t_profiles, { filters: { id: p.pax_id }, limit: 1 });
         const prof = profs?.[0];
         const name = prof ? `${prof.prenom || ""} ${prof.nom || ""}`.trim() : "Pax";
-        const text = String(cp.template || "Yoh {name} 🎉 Demain c'est ta sortie tontine.").replace("{name}", name);
+        const gender = (prof?.genre || prof?.sexe || "unknown") as Gender;
+        const text = buildTontineMessage("congrats", { name, gender, date_sortie: ymd });
         await emitEvent(conn.id, "tontine_congrats", `Félicitations préparées pour ${name}`, "info", text,
-          { pax_group_id: p.id, pax_id: p.pax_id, group_id: p.group_id, channel: cp.channel || "all", date_sortie: ymd });
-        await logAction(rule.id, conn.id, "congrats_sent", tref, "ok", { name, channel: cp.channel });
+          { pax_group_id: p.id, pax_id: p.pax_id, group_id: p.group_id, channel: cp.channel || "all", date_sortie: ymd, message: text });
+        await logAction(rule.id, conn.id, "congrats_sent", tref, "ok", { name, channel: cp.channel, message: text });
         summary.congrats++;
       }
     }
