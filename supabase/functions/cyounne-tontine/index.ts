@@ -6,6 +6,7 @@
 //               groups(versement_journalier, gain, statut)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { buildRemote, type AppConn } from "../_shared/remoteApp.ts";
+import { buildTontineMessage, type Gender } from "../_shared/tontineMessages.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -93,12 +94,17 @@ async function runEngineForRule(rule: Rule, conn: AppConn) {
 
     // 1a) Calcul frais de retard par versement (log seulement, pas d'écriture distante)
     for (const [pax_id, vers] of byPax) {
+      const { data: profs0 } = await r.select(t_profiles, { filters: { id: pax_id }, limit: 1 });
+      const p0 = profs0?.[0];
+      const name0 = p0 ? `${p0.prenom || ""} ${p0.nom || ""}`.trim() : pax_id;
+      const gender0 = (p0?.genre || p0?.sexe || "unknown") as Gender;
       for (const v of vers) {
         const target = `versement:${v.id}`;
         if (await alreadyDone(rule.id, "late_fee_applied", target)) continue;
         const fee = computeLateFee(rule.late_fee_formula, v.daysLate, Number(v.montant || 0));
         if (fee > 0) {
-          await logAction(rule.id, conn.id, "late_fee_applied", target, "ok", { fee, daysLate: v.daysLate, pax_id, montant: v.montant });
+          const message = buildTontineMessage("fee_applied", { name: name0, gender: gender0, fee, days_late: v.daysLate, amount: Number(v.montant || 0) });
+          await logAction(rule.id, conn.id, "late_fee_applied", target, "ok", { fee, daysLate: v.daysLate, pax_id, montant: v.montant, message });
           summary.late_fees++;
         }
       }
@@ -116,11 +122,13 @@ async function runEngineForRule(rule: Rule, conn: AppConn) {
       const { data: profs } = await r.select(t_profiles, { filters: { id: pax_id }, limit: 1 });
       const p = profs?.[0];
       const name = p ? `${p.prenom || ""} ${p.nom || ""}`.trim() : pax_id;
+      const gender = (p?.genre || p?.sexe || "unknown") as Gender;
+      const message = buildTontineMessage("block_warning", { name, gender, days_late: vers.length });
       await emitEvent(conn.id, "tontine_block", `Pax en retard répété: ${name}`,
         action === "alert_only" ? "warn" : "critical",
-        `${vers.length} versements en attente depuis plus de ${lateAfterDays} jours — action: ${action}`,
-        { pax_id, late_count: vers.length, action });
-      await logAction(rule.id, conn.id, "pax_blocked", target, "ok", { action, late_count: vers.length, name });
+        message,
+        { pax_id, late_count: vers.length, action, message });
+      await logAction(rule.id, conn.id, "pax_blocked", target, "ok", { action, late_count: vers.length, name, message });
       summary.blocked++;
     }
   } catch (e) {
@@ -142,10 +150,11 @@ async function runEngineForRule(rule: Rule, conn: AppConn) {
         const { data: profs } = await r.select(t_profiles, { filters: { id: p.pax_id }, limit: 1 });
         const prof = profs?.[0];
         const name = prof ? `${prof.prenom || ""} ${prof.nom || ""}`.trim() : "Pax";
-        const text = String(cp.template || "Yoh {name} 🎉 Demain c'est ta sortie tontine.").replace("{name}", name);
+        const gender = (prof?.genre || prof?.sexe || "unknown") as Gender;
+        const text = buildTontineMessage("congrats", { name, gender, date_sortie: ymd });
         await emitEvent(conn.id, "tontine_congrats", `Félicitations préparées pour ${name}`, "info", text,
-          { pax_group_id: p.id, pax_id: p.pax_id, group_id: p.group_id, channel: cp.channel || "all", date_sortie: ymd });
-        await logAction(rule.id, conn.id, "congrats_sent", tref, "ok", { name, channel: cp.channel });
+          { pax_group_id: p.id, pax_id: p.pax_id, group_id: p.group_id, channel: cp.channel || "all", date_sortie: ymd, message: text });
+        await logAction(rule.id, conn.id, "congrats_sent", tref, "ok", { name, channel: cp.channel, message: text });
         summary.congrats++;
       }
     }
@@ -213,6 +222,11 @@ Deno.serve(async (req) => {
     if (action === "preview_fee") {
       const fee = computeLateFee(body.formula, Number(body.days_late || 0), Number(body.base_amount || 0));
       return new Response(JSON.stringify({ fee }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (action === "preview_message") {
+      const message = buildTontineMessage(body.kind, body.ctx || {});
+      return new Response(JSON.stringify({ message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     return new Response(JSON.stringify({ error: "action inconnue" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
