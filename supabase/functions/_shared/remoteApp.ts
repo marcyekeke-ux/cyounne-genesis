@@ -93,11 +93,11 @@ class EdgeProxyClient implements RemoteApp {
     return { data: res.data || res.rows || [], error: undefined };
   }
   async insert(table: string, row: any) {
-    const res = await this.call("insert", { table, row });
+    const res = await this.call("insert", { table, values: row });
     return { data: res.data, error: res.error };
   }
   async update(table: string, match: Record<string, any>, patch: any) {
-    const res = await this.call("update", { table, match, patch });
+    const res = await this.call("update", { table, filters: match, values: patch });
     return { error: res.error };
   }
   async describe(table: string) {
