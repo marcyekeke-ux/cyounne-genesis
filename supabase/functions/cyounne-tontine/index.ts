@@ -77,6 +77,72 @@ async function alreadyDone(rule_id: string, action_type: string, target_ref: str
   return (data?.length || 0) > 0;
 }
 
+// ============ Lot 8F — Checkpoints / reprise prompts ============
+const PHASE_BUDGET_MS = 20000; // budget par run total
+const MAX_ATTEMPTS = 5;
+
+type PhaseStatus = "pending" | "running" | "done" | "failed" | "skipped";
+
+async function getCheckpoint(rule_id: string, phase: string) {
+  const { data } = await admin().from("tontine_checkpoints")
+    .select("*").eq("rule_id", rule_id).eq("phase", phase).maybeSingle();
+  return data as null | {
+    id: string; rule_id: string; phase: string; cursor: any;
+    status: PhaseStatus; last_error: string | null; attempts: number; summary: any;
+  };
+}
+
+async function upsertCheckpoint(rule_id: string, app_id: string | null, phase: string,
+  patch: { status?: PhaseStatus; cursor?: any; last_error?: string | null; summary?: any; bumpAttempts?: boolean }) {
+  const existing = await getCheckpoint(rule_id, phase);
+  if (!existing) {
+    await admin().from("tontine_checkpoints").insert({
+      rule_id, app_connection_id: app_id, phase,
+      status: patch.status ?? "pending",
+      cursor: patch.cursor ?? {},
+      summary: patch.summary ?? {},
+      last_error: patch.last_error ?? null,
+      attempts: patch.bumpAttempts ? 1 : 0,
+    });
+  } else {
+    const next: any = {
+      status: patch.status ?? existing.status,
+      cursor: patch.cursor ?? existing.cursor,
+      summary: patch.summary ?? existing.summary,
+      last_error: patch.last_error === undefined ? existing.last_error : patch.last_error,
+      attempts: patch.bumpAttempts ? (existing.attempts + 1) : existing.attempts,
+    };
+    await admin().from("tontine_checkpoints").update(next).eq("id", existing.id);
+  }
+}
+
+async function runPhase(
+  rule: Rule, conn: AppConn, phase: string, deadline: number,
+  fn: (cp: any) => Promise<{ cursor?: any; summary?: any }>,
+): Promise<{ status: PhaseStatus; summary: any; error?: string }> {
+  const existing = await getCheckpoint(rule.id, phase);
+  if (existing?.status === "done") return { status: "done", summary: existing.summary || {} };
+  if ((existing?.attempts || 0) >= MAX_ATTEMPTS && existing?.status === "failed") {
+    return { status: "failed", summary: existing.summary || {}, error: existing.last_error || "max_attempts" };
+  }
+  if (Date.now() >= deadline) {
+    await upsertCheckpoint(rule.id, conn.id, phase, { status: "pending", last_error: "deferred_budget_exhausted" });
+    return { status: "pending", summary: existing?.summary || {}, error: "deferred" };
+  }
+  await upsertCheckpoint(rule.id, conn.id, phase, { status: "running", bumpAttempts: true, last_error: null });
+  try {
+    const res = await fn(existing);
+    await upsertCheckpoint(rule.id, conn.id, phase, { status: "done", cursor: res.cursor ?? {}, summary: res.summary ?? {}, last_error: null });
+    return { status: "done", summary: res.summary ?? {} };
+  } catch (e) {
+    const msg = (e as Error).message;
+    await upsertCheckpoint(rule.id, conn.id, phase, { status: "failed", last_error: msg });
+    await emitEvent(conn.id, `tontine_${phase}_error`, `Erreur ${phase}`, "warn", msg);
+    return { status: "failed", summary: existing?.summary || {}, error: msg };
+  }
+}
+
+
 async function runEngineForRule(rule: Rule, conn: AppConn) {
   const map = rule.table_mapping || {};
   const t_versements = map.versements || "versements";
