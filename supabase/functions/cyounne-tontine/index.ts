@@ -138,11 +138,12 @@ async function runEngineForRule(rule: Rule, conn: AppConn) {
       const name = p ? `${p.prenom || ""} ${p.nom || ""}`.trim() : pax_id;
       const gender = (p?.genre || p?.sexe || "unknown") as Gender;
       const message = buildTontineMessage("block_warning", { name, gender, days_late: vers.length });
+      const sent = await dispatchNotify(`Tontine — alerte ${name}`, message, p);
       await emitEvent(conn.id, "tontine_block", `Pax en retard répété: ${name}`,
         action === "alert_only" ? "warn" : "critical",
         message,
-        { pax_id, late_count: vers.length, action, message });
-      await logAction(rule.id, conn.id, "pax_blocked", target, "ok", { action, late_count: vers.length, name, message });
+        { pax_id, late_count: vers.length, action, message, sent });
+      await logAction(rule.id, conn.id, "pax_blocked", target, "ok", { action, late_count: vers.length, name, message, sent });
       summary.blocked++;
     }
   } catch (e) {
