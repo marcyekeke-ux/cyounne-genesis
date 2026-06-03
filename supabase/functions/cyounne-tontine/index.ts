@@ -143,7 +143,7 @@ async function runPhase(
 }
 
 
-async function runEngineForRule(rule: Rule, conn: AppConn) {
+async function runEngineForRule(rule: Rule, conn: AppConn, opts: { phases?: string[]; deadline?: number } = {}) {
   const map = rule.table_mapping || {};
   const t_versements = map.versements || "versements";
   const t_profiles = map.profiles || "profiles";
@@ -153,79 +153,79 @@ async function runEngineForRule(rule: Rule, conn: AppConn) {
   const r = buildRemote(conn);
   const summary = { late_fees: 0, blocked: 0, congrats: 0, receipts: 0, errors: 0, pax_in_late: 0 };
   const today = new Date();
+  const deadline = opts.deadline ?? (Date.now() + PHASE_BUDGET_MS);
+  const wanted = new Set(opts.phases?.length ? opts.phases : ["late_detection", "congrats", "receipts"]);
+  const phases: Record<string, PhaseStatus> = {};
 
-  // 1) Détection retards: versements en_attente depuis > seuil de jours
-  try {
-    const policy = rule.block_policy || {};
-    const lateAfterDays = Number(policy.late_after_days || 2);
-    const { data: pending, error } = await r.select(t_versements, { filters: { statut: "en_attente" }, limit: 1000 });
-    if (error) throw new Error(error);
-
-    // grouper par pax_id
-    const byPax = new Map<string, any[]>();
-    for (const v of pending ?? []) {
-      const created = v.created_at ? new Date(v.created_at) : null;
-      const daysLate = created ? Math.floor((today.getTime() - created.getTime()) / 86400000) : 0;
-      if (daysLate >= lateAfterDays) {
-        if (!byPax.has(v.pax_id)) byPax.set(v.pax_id, []);
-        byPax.get(v.pax_id)!.push({ ...v, daysLate });
-      }
-    }
-
-    // 1a) Calcul frais de retard par versement (log seulement, pas d'écriture distante)
-    for (const [pax_id, vers] of byPax) {
-      const { data: profs0 } = await r.select(t_profiles, { filters: { id: pax_id }, limit: 1 });
-      const p0 = profs0?.[0];
-      const name0 = p0 ? `${p0.prenom || ""} ${p0.nom || ""}`.trim() : pax_id;
-      const gender0 = (p0?.genre || p0?.sexe || "unknown") as Gender;
-      for (const v of vers) {
-        const target = `versement:${v.id}`;
-        if (await alreadyDone(rule.id, "late_fee_applied", target)) continue;
-        const fee = computeLateFee(rule.late_fee_formula, v.daysLate, Number(v.montant || 0));
-        if (fee > 0) {
-          const message = buildTontineMessage("fee_applied", { name: name0, gender: gender0, fee, days_late: v.daysLate, amount: Number(v.montant || 0) });
-          await logAction(rule.id, conn.id, "late_fee_applied", target, "ok", { fee, daysLate: v.daysLate, pax_id, montant: v.montant, message });
-          summary.late_fees++;
+  if (wanted.has("late_detection")) {
+    const res = await runPhase(rule, conn, "late_detection", deadline, async () => {
+      const policy = rule.block_policy || {};
+      const lateAfterDays = Number(policy.late_after_days || 2);
+      const { data: pending, error } = await r.select(t_versements, { filters: { statut: "en_attente" }, limit: 1000 });
+      if (error) throw new Error(error);
+      const byPax = new Map<string, any[]>();
+      for (const v of pending ?? []) {
+        const created = v.created_at ? new Date(v.created_at) : null;
+        const daysLate = created ? Math.floor((today.getTime() - created.getTime()) / 86400000) : 0;
+        if (daysLate >= lateAfterDays) {
+          if (!byPax.has(v.pax_id)) byPax.set(v.pax_id, []);
+          byPax.get(v.pax_id)!.push({ ...v, daysLate });
         }
       }
-    }
-
-    summary.pax_in_late = byPax.size;
-
-    // 1b) Blocage après N retards
-    const threshold = Number(policy.after_late_count || 3);
-    const action = String(policy.action || "alert_only");
-    for (const [pax_id, vers] of byPax) {
-      if (vers.length < threshold) continue;
-      const target = `pax_block:${pax_id}:${today.toISOString().slice(0, 10)}`;
-      if (await alreadyDone(rule.id, "pax_blocked", target)) continue;
-      const { data: profs } = await r.select(t_profiles, { filters: { id: pax_id }, limit: 1 });
-      const p = profs?.[0];
-      const name = p ? `${p.prenom || ""} ${p.nom || ""}`.trim() : pax_id;
-      const gender = (p?.genre || p?.sexe || "unknown") as Gender;
-      const message = buildTontineMessage("block_warning", { name, gender, days_late: vers.length });
-      const sent = await dispatchNotify(`Tontine — alerte ${name}`, message, p);
-      await emitEvent(conn.id, "tontine_block", `Pax en retard répété: ${name}`,
-        action === "alert_only" ? "warn" : "critical",
-        message,
-        { pax_id, late_count: vers.length, action, message, sent });
-      await logAction(rule.id, conn.id, "pax_blocked", target, "ok", { action, late_count: vers.length, name, message, sent });
-      summary.blocked++;
-    }
-  } catch (e) {
-    summary.errors++;
-    await emitEvent(conn.id, "tontine_late_error", "Erreur détection retards", "warn", (e as Error).message);
+      for (const [pax_id, vers] of byPax) {
+        if (Date.now() >= deadline) throw new Error("budget_exceeded");
+        const { data: profs0 } = await r.select(t_profiles, { filters: { id: pax_id }, limit: 1 });
+        const p0 = profs0?.[0];
+        const name0 = p0 ? `${p0.prenom || ""} ${p0.nom || ""}`.trim() : pax_id;
+        const gender0 = (p0?.genre || p0?.sexe || "unknown") as Gender;
+        for (const v of vers) {
+          const target = `versement:${v.id}`;
+          if (await alreadyDone(rule.id, "late_fee_applied", target)) continue;
+          const fee = computeLateFee(rule.late_fee_formula, v.daysLate, Number(v.montant || 0));
+          if (fee > 0) {
+            const message = buildTontineMessage("fee_applied", { name: name0, gender: gender0, fee, days_late: v.daysLate, amount: Number(v.montant || 0) });
+            await logAction(rule.id, conn.id, "late_fee_applied", target, "ok", { fee, daysLate: v.daysLate, pax_id, montant: v.montant, message });
+            summary.late_fees++;
+          }
+        }
+      }
+      summary.pax_in_late = byPax.size;
+      const threshold = Number(policy.after_late_count || 3);
+      const action = String(policy.action || "alert_only");
+      for (const [pax_id, vers] of byPax) {
+        if (Date.now() >= deadline) throw new Error("budget_exceeded");
+        if (vers.length < threshold) continue;
+        const target = `pax_block:${pax_id}:${today.toISOString().slice(0, 10)}`;
+        if (await alreadyDone(rule.id, "pax_blocked", target)) continue;
+        const { data: profs } = await r.select(t_profiles, { filters: { id: pax_id }, limit: 1 });
+        const p = profs?.[0];
+        const name = p ? `${p.prenom || ""} ${p.nom || ""}`.trim() : pax_id;
+        const gender = (p?.genre || p?.sexe || "unknown") as Gender;
+        const message = buildTontineMessage("block_warning", { name, gender, days_late: vers.length });
+        const sent = await dispatchNotify(`Tontine — alerte ${name}`, message, p);
+        await emitEvent(conn.id, "tontine_block", `Pax en retard répété: ${name}`,
+          action === "alert_only" ? "warn" : "critical",
+          message,
+          { pax_id, late_count: vers.length, action, message, sent });
+        await logAction(rule.id, conn.id, "pax_blocked", target, "ok", { action, late_count: vers.length, name, message, sent });
+        summary.blocked++;
+      }
+      return { summary: { late_fees: summary.late_fees, blocked: summary.blocked, pax_in_late: summary.pax_in_late } };
+    });
+    phases.late_detection = res.status;
+    if (res.status !== "done") summary.errors++;
   }
 
-  // 2) Félicitations veille de sortie (pax_groups.date_sortie = J+N)
-  try {
-    const cp = rule.congrats_policy || {};
-    if (cp.enabled) {
+  if (wanted.has("congrats")) {
+    const res = await runPhase(rule, conn, "congrats", deadline, async () => {
+      const cp = rule.congrats_policy || {};
+      if (!cp.enabled) return { summary: { skipped: true } };
       const daysBefore = Number(cp.days_before || 1);
       const target = new Date(); target.setDate(target.getDate() + daysBefore);
       const ymd = target.toISOString().slice(0, 10);
       const { data: payouts } = await r.select(t_pax_groups, { filters: { date_sortie: ymd }, limit: 200 });
       for (const p of payouts ?? []) {
+        if (Date.now() >= deadline) throw new Error("budget_exceeded");
         const tref = `congrats:${p.id}`;
         if (await alreadyDone(rule.id, "congrats_sent", tref)) continue;
         const { data: profs } = await r.select(t_profiles, { filters: { id: p.pax_id }, limit: 1 });
@@ -239,20 +239,21 @@ async function runEngineForRule(rule: Rule, conn: AppConn) {
         await logAction(rule.id, conn.id, "congrats_sent", tref, "ok", { name, channel: cp.channel, message: text, sent });
         summary.congrats++;
       }
-    }
-  } catch (e) {
-    summary.errors++;
-    await emitEvent(conn.id, "tontine_congrats_error", "Erreur félicitations", "warn", (e as Error).message);
+      return { summary: { congrats: summary.congrats } };
+    });
+    phases.congrats = res.status;
+    if (res.status !== "done") summary.errors++;
   }
 
-  // 3) Reçus PDF: versements valide_admin sans reçu correspondant
-  try {
-    const rp = rule.receipt_policy || {};
-    if (rp.enabled) {
+  if (wanted.has("receipts")) {
+    const res = await runPhase(rule, conn, "receipts", deadline, async () => {
+      const rp = rule.receipt_policy || {};
+      if (!rp.enabled) return { summary: { skipped: true } };
       const { data: validated } = await r.select(t_versements, { filters: { statut: "valide_admin" }, limit: 500 });
       const { data: recus } = await r.select(t_recus, { limit: 1000 });
       const recuByVers = new Set((recus ?? []).map((x: any) => x.versement_id));
       for (const v of validated ?? []) {
+        if (Date.now() >= deadline) throw new Error("budget_exceeded");
         if (recuByVers.has(v.id)) continue;
         const tref = `receipt_pending:${v.id}`;
         if (await alreadyDone(rule.id, "receipt_pending", tref)) continue;
@@ -262,14 +263,46 @@ async function runEngineForRule(rule: Rule, conn: AppConn) {
         await logAction(rule.id, conn.id, "receipt_pending", tref, "ok", { include_qr: !!rp.include_qr });
         summary.receipts++;
       }
-    }
-  } catch (e) {
-    summary.errors++;
-    await emitEvent(conn.id, "tontine_receipt_error", "Erreur reçu PDF", "warn", (e as Error).message);
+      return { summary: { receipts: summary.receipts } };
+    });
+    phases.receipts = res.status;
+    if (res.status !== "done") summary.errors++;
   }
 
-  return summary;
+  return { ...summary, phases };
 }
+
+async function resumeAll() {
+  const sb = admin();
+  const { data: rules } = await sb.from("tontine_rules").select("*").eq("enabled", true);
+  const out: any[] = [];
+  const globalDeadline = Date.now() + PHASE_BUDGET_MS;
+  for (const rule of rules ?? []) {
+    if (Date.now() >= globalDeadline) { out.push({ rule_id: rule.id, deferred: true }); continue; }
+    const { data: conn } = await sb.from("app_connections").select("*").eq("id", rule.app_connection_id).maybeSingle();
+    if (!conn) continue;
+    const { data: cps } = await sb.from("tontine_checkpoints").select("phase,status").eq("rule_id", rule.id);
+    const todo = ["late_detection", "congrats", "receipts"].filter((ph) => {
+      const cp = (cps ?? []).find((x: any) => x.phase === ph);
+      return !cp || cp.status !== "done";
+    });
+    if (!todo.length) { out.push({ rule_id: rule.id, name: rule.name, resumed: false, reason: "all_done" }); continue; }
+    try {
+      const summary = await runEngineForRule(rule as Rule, conn as AppConn, { phases: todo, deadline: globalDeadline });
+      out.push({ rule_id: rule.id, name: rule.name, resumed: todo, summary });
+    } catch (e) {
+      out.push({ rule_id: rule.id, error: (e as Error).message });
+    }
+  }
+  return out;
+}
+
+async function resetCheckpoints(rule_id?: string) {
+  const q = admin().from("tontine_checkpoints").delete();
+  const { error } = rule_id ? await q.eq("rule_id", rule_id) : await q.neq("id", "00000000-0000-0000-0000-000000000000");
+  return { ok: !error, error: error?.message };
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
