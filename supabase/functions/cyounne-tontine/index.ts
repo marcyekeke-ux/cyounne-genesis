@@ -245,6 +245,24 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (action === "cascade_ai") {
+      const res = await aiText({ prompt: body.prompt || "", system: body.system, maxTokens: body.maxTokens });
+      return new Response(JSON.stringify({ ...publicResult(res), _debug: { attempts: res.attempts, provider_used: res.provider_used } }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (action === "cascade_notify") {
+      const res = await notify(body);
+      return new Response(JSON.stringify({ ...publicResult(res), _debug: { attempts: res.attempts, provider_used: res.provider_used } }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (action === "cascade_tts") {
+      const res = await tts({ text: body.text || "", voice: body.voice });
+      return new Response(JSON.stringify({ ...publicResult(res), _debug: { attempts: res.attempts, provider_used: res.provider_used } }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     return new Response(JSON.stringify({ error: "action inconnue" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("cyounne-tontine error", e);
