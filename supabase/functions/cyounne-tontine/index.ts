@@ -362,6 +362,22 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (action === "resume_all") {
+      const results = await resumeAll();
+      return new Response(JSON.stringify({ ok: true, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (action === "reset_checkpoints") {
+      const r = await resetCheckpoints(body.rule_id);
+      return new Response(JSON.stringify(r), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (action === "phase_status") {
+      const q = sb.from("tontine_checkpoints").select("*");
+      const { data } = await (body.rule_id ? q.eq("rule_id", body.rule_id) : q);
+      return new Response(JSON.stringify({ ok: true, checkpoints: data ?? [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     return new Response(JSON.stringify({ error: "action inconnue" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("cyounne-tontine error", e);
