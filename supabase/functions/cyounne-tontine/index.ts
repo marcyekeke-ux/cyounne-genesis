@@ -7,6 +7,20 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { buildRemote, type AppConn } from "../_shared/remoteApp.ts";
 import { buildTontineMessage, type Gender } from "../_shared/tontineMessages.ts";
+import { aiText, notify, tts, publicResult } from "../_shared/apiCascade.ts";
+
+async function dispatchNotify(title: string, message: string, profile: any) {
+  try {
+    const res = await notify({
+      title,
+      message,
+      whatsapp_to: profile?.telephone || profile?.whatsapp || null,
+      telegram_chat_id: profile?.telegram_chat_id || null,
+      email: profile?.email || null,
+    });
+    return { delivered: res.ok, channel: res.provider_used || null };
+  } catch { return { delivered: false, channel: null }; }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -124,11 +138,12 @@ async function runEngineForRule(rule: Rule, conn: AppConn) {
       const name = p ? `${p.prenom || ""} ${p.nom || ""}`.trim() : pax_id;
       const gender = (p?.genre || p?.sexe || "unknown") as Gender;
       const message = buildTontineMessage("block_warning", { name, gender, days_late: vers.length });
+      const sent = await dispatchNotify(`Tontine — alerte ${name}`, message, p);
       await emitEvent(conn.id, "tontine_block", `Pax en retard répété: ${name}`,
         action === "alert_only" ? "warn" : "critical",
         message,
-        { pax_id, late_count: vers.length, action, message });
-      await logAction(rule.id, conn.id, "pax_blocked", target, "ok", { action, late_count: vers.length, name, message });
+        { pax_id, late_count: vers.length, action, message, sent });
+      await logAction(rule.id, conn.id, "pax_blocked", target, "ok", { action, late_count: vers.length, name, message, sent });
       summary.blocked++;
     }
   } catch (e) {
@@ -152,9 +167,10 @@ async function runEngineForRule(rule: Rule, conn: AppConn) {
         const name = prof ? `${prof.prenom || ""} ${prof.nom || ""}`.trim() : "Pax";
         const gender = (prof?.genre || prof?.sexe || "unknown") as Gender;
         const text = buildTontineMessage("congrats", { name, gender, date_sortie: ymd });
+        const sent = await dispatchNotify(`Tontine — sortie ${name}`, text, prof);
         await emitEvent(conn.id, "tontine_congrats", `Félicitations préparées pour ${name}`, "info", text,
-          { pax_group_id: p.id, pax_id: p.pax_id, group_id: p.group_id, channel: cp.channel || "all", date_sortie: ymd, message: text });
-        await logAction(rule.id, conn.id, "congrats_sent", tref, "ok", { name, channel: cp.channel, message: text });
+          { pax_group_id: p.id, pax_id: p.pax_id, group_id: p.group_id, channel: cp.channel || "all", date_sortie: ymd, message: text, sent });
+        await logAction(rule.id, conn.id, "congrats_sent", tref, "ok", { name, channel: cp.channel, message: text, sent });
         summary.congrats++;
       }
     }
@@ -227,6 +243,24 @@ Deno.serve(async (req) => {
     if (action === "preview_message") {
       const message = buildTontineMessage(body.kind, body.ctx || {});
       return new Response(JSON.stringify({ message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (action === "cascade_ai") {
+      const res = await aiText({ prompt: body.prompt || "", system: body.system, maxTokens: body.maxTokens });
+      return new Response(JSON.stringify({ ...publicResult(res), _debug: { attempts: res.attempts, provider_used: res.provider_used } }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (action === "cascade_notify") {
+      const res = await notify(body);
+      return new Response(JSON.stringify({ ...publicResult(res), _debug: { attempts: res.attempts, provider_used: res.provider_used } }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (action === "cascade_tts") {
+      const res = await tts({ text: body.text || "", voice: body.voice });
+      return new Response(JSON.stringify({ ...publicResult(res), _debug: { attempts: res.attempts, provider_used: res.provider_used } }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     return new Response(JSON.stringify({ error: "action inconnue" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
