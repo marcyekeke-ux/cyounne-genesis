@@ -7,6 +7,20 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { buildRemote, type AppConn } from "../_shared/remoteApp.ts";
 import { buildTontineMessage, type Gender } from "../_shared/tontineMessages.ts";
+import { aiText, notify, tts, publicResult } from "../_shared/apiCascade.ts";
+
+async function dispatchNotify(title: string, message: string, profile: any) {
+  try {
+    const res = await notify({
+      title,
+      message,
+      whatsapp_to: profile?.telephone || profile?.whatsapp || null,
+      telegram_chat_id: profile?.telegram_chat_id || null,
+      email: profile?.email || null,
+    });
+    return { delivered: res.ok, channel: res.provider_used || null };
+  } catch { return { delivered: false, channel: null }; }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
