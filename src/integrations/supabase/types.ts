@@ -551,6 +551,48 @@ export type Database = {
           },
         ]
       }
+      tontine_checkpoints: {
+        Row: {
+          app_connection_id: string | null
+          attempts: number
+          created_at: string
+          cursor: Json
+          id: string
+          last_error: string | null
+          phase: string
+          rule_id: string
+          status: string
+          summary: Json
+          updated_at: string
+        }
+        Insert: {
+          app_connection_id?: string | null
+          attempts?: number
+          created_at?: string
+          cursor?: Json
+          id?: string
+          last_error?: string | null
+          phase: string
+          rule_id: string
+          status?: string
+          summary?: Json
+          updated_at?: string
+        }
+        Update: {
+          app_connection_id?: string | null
+          attempts?: number
+          created_at?: string
+          cursor?: Json
+          id?: string
+          last_error?: string | null
+          phase?: string
+          rule_id?: string
+          status?: string
+          summary?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tontine_rules: {
         Row: {
           app_connection_id: string
