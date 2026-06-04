@@ -268,12 +268,15 @@ Deno.serve(async (req) => {
 
     const knowledgeBlock = await fetchKnowledge();
 
+    const adminToolsHint = isAdmin
+      ? "\n\nACCÈS DONNÉES TONTINES (admin) : tu disposes des outils list_tontines et list_late_pax. Pour TOUTE question portant sur les pax, tontines, versements, retards, sorties, montants : appelle TOUJOURS les outils en priorité avant de répondre. Si une tontine est nommée (ex: 'Team boss'), appelle list_tontines d'abord pour le rule_id exact, puis list_late_pax. Ne formule aucun nom ni chiffre tant que les outils ne te les ont pas retournés. Si l'outil renvoie une erreur ou une liste vide, dis-le franchement."
+      : "";
+
     const fullMessages = [
-      { role: "system", content: SYSTEM_PROMPT + "\n" + personalityHint + knowledgeBlock },
+      { role: "system", content: SYSTEM_PROMPT + "\n" + personalityHint + adminToolsHint + knowledgeBlock },
       ...messages,
     ];
 
-    // Cascade 3s par provider — basculement instantané (Groq→Gemini→Mistral→HF)
     const logProv = async (provider: string, status: string, ms: number, detail?: string) => {
       try {
         const url = Deno.env.get("SUPABASE_URL");
@@ -289,6 +292,20 @@ Deno.serve(async (req) => {
     };
 
     let lastError: any = null;
+
+    // Admin : Lovable + tool-calling en priorité pour accès aux vraies données Tontines
+    if (isAdmin) {
+      const t0 = Date.now();
+      try {
+        const result = await callLovableWithTools(fullMessages);
+        await logProv("lovable+tools", "success", Date.now() - t0);
+        return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      } catch (e) {
+        const msg = (e as Error).message;
+        await logProv("lovable+tools", msg.includes("abort") ? "timeout" : "fail", Date.now() - t0, msg);
+        lastError = e;
+      }
+    }
     for (const p of PROVIDERS) {
       const t0 = Date.now();
       try {
