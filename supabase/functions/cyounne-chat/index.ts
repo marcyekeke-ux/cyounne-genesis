@@ -144,6 +144,119 @@ async function callWithTimeout(fn: () => Promise<any>, ms = 3000) {
   }
 }
 
+// ============ Tool-calling : accès réel aux données Tontines (admin uniquement) ============
+const TONTINE_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "list_tontines",
+      description: "Liste les tontines (règles) configurées dans EMR Tontines. À appeler AVANT toute question sur des données opérationnelles (pax, retards, sorties, montants).",
+      parameters: { type: "object", properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_late_pax",
+      description: "Liste les pax en retard de versement pour une tontine. Fournir rule_id (préféré) ou tontine_name (recherche floue).",
+      parameters: {
+        type: "object",
+        properties: {
+          rule_id: { type: "string", description: "Identifiant exact de la règle" },
+          tontine_name: { type: "string", description: "Nom approximatif de la tontine, ex: 'Team boss'" },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+];
+
+async function execTontineTool(name: string, args: any): Promise<any> {
+  const adm = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  if (name === "list_tontines") {
+    const { data, error } = await adm.from("tontine_rules").select("id,name,enabled,app_connection_id").order("created_at", { ascending: false });
+    if (error) return { error: error.message };
+    return { tontines: data || [] };
+  }
+  if (name === "list_late_pax") {
+    let q: any = adm.from("tontine_rules").select("*");
+    if (args?.rule_id) q = q.eq("id", args.rule_id);
+    else if (args?.tontine_name) q = q.ilike("name", `%${args.tontine_name}%`);
+    const { data: rules } = await q.limit(1);
+    const rule = rules?.[0];
+    if (!rule) return { error: "tontine_introuvable", hint: "Appelle d'abord list_tontines pour voir les noms exacts." };
+    const { data: conn } = await adm.from("app_connections").select("*").eq("id", rule.app_connection_id).maybeSingle();
+    if (!conn) return { error: "app_connection_introuvable", tontine: rule.name };
+    const r = buildRemote(conn as AppConn);
+    const map = rule.table_mapping || {};
+    const t_versements = map.versements || "versements";
+    const t_profiles = map.profiles || "profiles";
+    const lateAfterDays = Number(rule.block_policy?.late_after_days || 2);
+    const { data: pending, error: errV } = await r.select(t_versements, { filters: { statut: "en_attente" }, limit: 1000 });
+    if (errV) return { error: `lecture_versements: ${errV}`, tontine: rule.name };
+    const now = Date.now();
+    const byPax = new Map<string, any[]>();
+    for (const v of pending || []) {
+      const days = v.created_at ? Math.floor((now - new Date(v.created_at).getTime()) / 86400000) : 0;
+      if (days >= lateAfterDays) {
+        if (!byPax.has(v.pax_id)) byPax.set(v.pax_id, []);
+        byPax.get(v.pax_id)!.push({ id: v.id, montant: v.montant, days_late: days });
+      }
+    }
+    const late_pax: any[] = [];
+    for (const [pax_id, vers] of byPax) {
+      const { data: profs } = await r.select(t_profiles, { filters: { id: pax_id }, limit: 1 });
+      const p = profs?.[0];
+      const name = p ? `${p.prenom || ""} ${p.nom || ""}`.trim() : null;
+      late_pax.push({
+        pax_id,
+        nom_complet: name,
+        telephone: p?.telephone || null,
+        nb_versements_en_retard: vers.length,
+        montant_total_du: vers.reduce((s: number, v: any) => s + Number(v.montant || 0), 0),
+        versements: vers,
+      });
+    }
+    return { tontine: rule.name, late_after_days: lateAfterDays, total_pax_en_retard: late_pax.length, late_pax };
+  }
+  return { error: "tool_inconnu" };
+}
+
+async function callLovableWithTools(messages: any[]): Promise<{ content: string; provider: string }> {
+  const key = Deno.env.get("LOVABLE_API_KEY");
+  if (!key) throw new Error("lovable key missing");
+  const working = [...messages];
+  for (let i = 0; i < 3; i++) {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 8000);
+    let data: any;
+    try {
+      const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "google/gemini-2.5-flash", messages: working, tools: TONTINE_TOOLS, temperature: 0.7 }),
+        signal: ctl.signal,
+      });
+      if (!res.ok) throw new Error(`lovable ${res.status}`);
+      data = await res.json();
+    } finally { clearTimeout(t); }
+    const msg = data.choices?.[0]?.message;
+    if (!msg) throw new Error("lovable empty");
+    if (msg.tool_calls?.length) {
+      working.push(msg);
+      for (const tc of msg.tool_calls) {
+        let args: any = {};
+        try { args = JSON.parse(tc.function?.arguments || "{}"); } catch {}
+        const out = await execTontineTool(tc.function?.name, args);
+        working.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(out) });
+      }
+      continue;
+    }
+    return { content: stripMarkdown(msg.content || ""), provider: "lovable" };
+  }
+  throw new Error("tool loop exceeded");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
