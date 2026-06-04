@@ -1,5 +1,8 @@
-// Cyounne brain — multi-LLM with automatic fallback
-// Order: Groq -> Gemini -> Mistral -> HuggingFace
+// Cyounne brain — multi-LLM with automatic fallback + tool-calling sur les Tontines (admin)
+// Order: Lovable(+tools si admin) -> Groq -> Gemini -> Mistral -> HuggingFace
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { buildRemote, type AppConn } from "../_shared/remoteApp.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
