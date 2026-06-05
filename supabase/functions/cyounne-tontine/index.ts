@@ -378,6 +378,58 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, checkpoints: data ?? [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (action === "list_rules") {
+      const { data, error } = await sb.from("tontine_rules")
+        .select("id,name,enabled,app_connection_id,block_policy,late_fee_formula,table_mapping,created_at")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return new Response(JSON.stringify({ ok: true, rules: data ?? [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (action === "list_late_pax" && body.rule_id) {
+      const { data: rule } = await sb.from("tontine_rules").select("*").eq("id", body.rule_id).maybeSingle();
+      if (!rule) throw new Error("Règle introuvable");
+      const { data: conn } = await sb.from("app_connections").select("*").eq("id", rule.app_connection_id).maybeSingle();
+      if (!conn) throw new Error("Connexion app introuvable");
+      const r = buildRemote(conn as AppConn);
+      const map = (rule as any).table_mapping || {};
+      const t_versements = map.versements || "versements";
+      const t_profiles = map.profiles || "profiles";
+      const lateAfterDays = Number((rule as any).block_policy?.late_after_days ?? (rule as any).block_policy?.after_late_count ?? 2);
+      const { data: pending, error: errV } = await r.select(t_versements, { filters: { statut: "en_attente" }, limit: 1000 });
+      if (errV) throw new Error(`lecture_versements: ${errV}`);
+      const now = Date.now();
+      const byPax = new Map<string, any[]>();
+      for (const v of pending || []) {
+        const days = v.created_at ? Math.floor((now - new Date(v.created_at).getTime()) / 86400000) : 0;
+        if (days >= lateAfterDays) {
+          if (!byPax.has(v.pax_id)) byPax.set(v.pax_id, []);
+          byPax.get(v.pax_id)!.push({ id: v.id, montant: v.montant, statut: v.statut, days_late: days, created_at: v.created_at });
+        }
+      }
+      const late_pax: any[] = [];
+      for (const [pax_id, vers] of byPax) {
+        const { data: profs } = await r.select(t_profiles, { filters: { id: pax_id }, limit: 1 });
+        const p = profs?.[0];
+        late_pax.push({
+          pax_id,
+          nom_complet: p ? `${p.prenom || ""} ${p.nom || ""}`.trim() : null,
+          telephone: p?.telephone || null,
+          nb_versements_en_retard: vers.length,
+          montant_total_du: vers.reduce((s: number, v: any) => s + Number(v.montant || 0), 0),
+          versements: vers,
+        });
+      }
+      late_pax.sort((a, b) => b.montant_total_du - a.montant_total_du);
+      return new Response(JSON.stringify({
+        ok: true,
+        tontine: (rule as any).name,
+        late_after_days: lateAfterDays,
+        total: late_pax.length,
+        late_pax,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     return new Response(JSON.stringify({ error: "action inconnue" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("cyounne-tontine error", e);
