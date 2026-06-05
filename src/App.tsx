@@ -48,6 +48,7 @@ const App = () => (
           <Route path="/admin/trends" element={<ProtectedRoute adminOnly><AdminTrends /></ProtectedRoute>} />
           <Route path="/admin/sync-apps" element={<ProtectedRoute adminOnly><AdminSyncApps /></ProtectedRoute>} />
           <Route path="/admin/tontine-rules" element={<ProtectedRoute adminOnly><AdminTontineRules /></ProtectedRoute>} />
+          <Route path="/admin/tontine-late" element={<ProtectedRoute adminOnly><AdminTontineLate /></ProtectedRoute>} />
           <Route path="/embed" element={<Embed />} />
           {/* catch-all */}
           <Route path="*" element={<NotFound />} />
