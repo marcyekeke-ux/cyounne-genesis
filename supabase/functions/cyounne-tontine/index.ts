@@ -430,6 +430,50 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (action === "send_late_reminders" && body.rule_id && Array.isArray(body.pax_ids)) {
+      const { data: rule } = await sb.from("tontine_rules").select("*").eq("id", body.rule_id).maybeSingle();
+      if (!rule) throw new Error("Règle introuvable");
+      const { data: conn } = await sb.from("app_connections").select("*").eq("id", rule.app_connection_id).maybeSingle();
+      if (!conn) throw new Error("Connexion app introuvable");
+      const r = buildRemote(conn as AppConn);
+      const map = (rule as any).table_mapping || {};
+      const t_versements = map.versements || "versements";
+      const t_profiles = map.profiles || "profiles";
+      const lateAfterDays = Number((rule as any).block_policy?.late_after_days ?? 2);
+      const { data: pending } = await r.select(t_versements, { filters: { statut: "en_attente" }, limit: 1000 });
+      const now = Date.now();
+      const byPax = new Map<string, any[]>();
+      for (const v of pending || []) {
+        const days = v.created_at ? Math.floor((now - new Date(v.created_at).getTime()) / 86400000) : 0;
+        if (days >= lateAfterDays) {
+          if (!byPax.has(v.pax_id)) byPax.set(v.pax_id, []);
+          byPax.get(v.pax_id)!.push({ ...v, days_late: days });
+        }
+      }
+      const results: any[] = [];
+      for (const pax_id of body.pax_ids as string[]) {
+        const vers = byPax.get(pax_id);
+        if (!vers || !vers.length) { results.push({ pax_id, ok: false, reason: "non_en_retard" }); continue; }
+        const { data: profs } = await r.select(t_profiles, { filters: { id: pax_id }, limit: 1 });
+        const p = profs?.[0];
+        if (!p?.telephone) { results.push({ pax_id, ok: false, reason: "telephone_manquant" }); continue; }
+        const maxDays = Math.max(...vers.map((v: any) => v.days_late));
+        const totalDu = vers.reduce((s: number, v: any) => s + Number(v.montant || 0), 0);
+        const name = `${p.prenom || ""} ${p.nom || ""}`.trim() || "Pax";
+        const gender = (p.genre || p.sexe || "unknown") as Gender;
+        const message = buildTontineMessage("late_warning", { name, gender, days_late: maxDays, amount: totalDu });
+        try {
+          const sent = await notify({ title: `Tontine ${(rule as any).name}`, message, whatsapp_to: p.telephone });
+          await logAction((rule as any).id, (conn as any).id, "reminder_sent", `pax:${pax_id}:${new Date().toISOString().slice(0,10)}`, sent.ok ? "ok" : "fail", { channel: sent.provider_used, message, telephone: p.telephone });
+          results.push({ pax_id, name, telephone: p.telephone, ok: sent.ok, channel: sent.provider_used || null });
+        } catch (e) {
+          results.push({ pax_id, ok: false, reason: (e as Error).message });
+        }
+      }
+      const okCount = results.filter((r) => r.ok).length;
+      return new Response(JSON.stringify({ ok: true, sent: okCount, total: results.length, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     return new Response(JSON.stringify({ error: "action inconnue" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("cyounne-tontine error", e);
