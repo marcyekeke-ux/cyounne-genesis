@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Loader2, RefreshCw, AlertTriangle, Users } from "lucide-react";
+import { Loader2, RefreshCw, AlertTriangle, Users, Send } from "lucide-react";
 import { toast } from "sonner";
 
 type Rule = { id: string; name: string; enabled: boolean; app_connection_id: string };
@@ -27,6 +28,8 @@ export default function AdminTontineLate() {
   const [selected, setSelected] = useState<Rule | null>(null);
   const [loadingLate, setLoadingLate] = useState(false);
   const [result, setResult] = useState<LateResult | null>(null);
+  const [selectedPax, setSelectedPax] = useState<Set<string>>(new Set());
+  const [sending, setSending] = useState(false);
 
   const loadRules = async () => {
     setLoadingRules(true);
@@ -44,6 +47,7 @@ export default function AdminTontineLate() {
   const loadLate = async (rule: Rule) => {
     setSelected(rule);
     setResult(null);
+    setSelectedPax(new Set());
     setLoadingLate(true);
     try {
       const { data, error } = await supabase.functions.invoke("cyounne-tontine", {
@@ -62,6 +66,47 @@ export default function AdminTontineLate() {
   useEffect(() => { loadRules(); }, []);
 
   const totalDu = result?.late_pax.reduce((s, p) => s + p.montant_total_du, 0) ?? 0;
+
+  const togglePax = (pax_id: string) => {
+    setSelectedPax((prev) => {
+      const next = new Set(prev);
+      if (next.has(pax_id)) next.delete(pax_id); else next.add(pax_id);
+      return next;
+    });
+  };
+
+  const eligible = useMemo(
+    () => (result?.late_pax ?? []).filter((p) => !!p.telephone),
+    [result],
+  );
+  const allSelected = eligible.length > 0 && eligible.every((p) => selectedPax.has(p.pax_id));
+
+  const toggleAll = () => {
+    if (allSelected) setSelectedPax(new Set());
+    else setSelectedPax(new Set(eligible.map((p) => p.pax_id)));
+  };
+
+  const sendReminders = async () => {
+    if (!selected || selectedPax.size === 0) return;
+    setSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("cyounne-tontine", {
+        body: { action: "send_late_reminders", rule_id: selected.id, pax_ids: Array.from(selectedPax) },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || "Échec d'envoi");
+      const { sent, total, results } = data as { sent: number; total: number; results: any[] };
+      if (sent === total) toast.success(`Rappels WhatsApp envoyés à ${sent} pax`);
+      else toast.warning(`${sent}/${total} envoyés. Vérifie les numéros manquants.`);
+      const failed = results.filter((r) => !r.ok);
+      if (failed.length) console.warn("Rappels échoués:", failed);
+      setSelectedPax(new Set());
+    } catch (e: any) {
+      toast.error(e.message || "Échec de l'envoi des rappels");
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
@@ -107,16 +152,26 @@ export default function AdminTontineLate() {
 
       {selected && (
         <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-destructive" />
               <span className="font-medium">Retards · {selected.name}</span>
             </div>
-            {result && (
-              <div className="text-xs text-muted-foreground">
-                seuil {result.late_after_days}j · {result.total} pax · {fmt(totalDu)} dûs
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              {result && (
+                <div className="text-xs text-muted-foreground">
+                  seuil {result.late_after_days}j · {result.total} pax · {fmt(totalDu)} dûs
+                </div>
+              )}
+              <Button
+                size="sm"
+                onClick={sendReminders}
+                disabled={sending || selectedPax.size === 0}
+              >
+                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                <span className="ml-2">Envoyer rappel WhatsApp ({selectedPax.size})</span>
+              </Button>
+            </div>
           </div>
 
           {loadingLate ? (
@@ -127,6 +182,9 @@ export default function AdminTontineLate() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Tout sélectionner" />
+                  </TableHead>
                   <TableHead>Pax</TableHead>
                   <TableHead>Téléphone</TableHead>
                   <TableHead className="text-right">Versements</TableHead>
@@ -137,13 +195,24 @@ export default function AdminTontineLate() {
               <TableBody>
                 {result.late_pax.map((p) => {
                   const maxDays = Math.max(...p.versements.map((v) => v.days_late), 0);
+                  const hasPhone = !!p.telephone;
                   return (
                     <TableRow key={p.pax_id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedPax.has(p.pax_id)}
+                          onCheckedChange={() => togglePax(p.pax_id)}
+                          disabled={!hasPhone}
+                          aria-label={`Sélectionner ${p.nom_complet || p.pax_id}`}
+                        />
+                      </TableCell>
                       <TableCell>
                         <div className="font-medium">{p.nom_complet || "—"}</div>
                         <div className="text-[11px] text-muted-foreground">{p.pax_id}</div>
                       </TableCell>
-                      <TableCell className="text-xs">{p.telephone || "—"}</TableCell>
+                      <TableCell className="text-xs">
+                        {hasPhone ? p.telephone : <span className="text-muted-foreground italic">non renseigné</span>}
+                      </TableCell>
                       <TableCell className="text-right">{p.nb_versements_en_retard}</TableCell>
                       <TableCell className="text-right">
                         <Badge variant={maxDays >= 7 ? "destructive" : "secondary"}>{maxDays}j</Badge>
