@@ -19,6 +19,7 @@ import AdminSettings from "./pages/admin/AdminSettings.tsx";
 import AdminTrends from "./pages/admin/AdminTrends.tsx";
 import AdminSyncApps from "./pages/admin/AdminSyncApps.tsx";
 import AdminTontineRules from "./pages/admin/AdminTontineRules.tsx";
+import AdminTontineLate from "./pages/admin/AdminTontineLate.tsx";
 import Embed from "./pages/Embed.tsx";
 import { ProtectedRoute } from "./components/cyounne/ProtectedRoute.tsx";
 
