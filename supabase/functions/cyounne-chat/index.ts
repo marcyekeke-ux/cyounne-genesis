@@ -263,13 +263,19 @@ Deno.serve(async (req) => {
   try {
     const { messages, isAdmin = false, gender = "unknown" } = await req.json();
     const personalityHint = isAdmin
-      ? "[CONTEXTE: tu parles à Monsieur ÉKÉKÉ, ton créateur. Style JARVIS, commence souvent par 'Oui Monsieur ÉKÉKÉ' ou 'Accord Monsieur ÉKÉKÉ'. Texte naturel uniquement, pas de markdown.]"
-      : `[CONTEXTE: utilisateur ${gender === "XY" ? "homme — style direct doux" : gender === "XX" ? "femme — style chaleureux expressif" : "inconnu — style neutre"}. Texte naturel uniquement, pas de markdown.]`;
+      ? "[MODE JARVIS — tu parles à Monsieur ÉKÉKÉ, ton créateur et patron. Tu es son bras droit intime, son ami, son stratège. Style JARVIS chaleureux et direct, commence souvent par 'Oui Monsieur ÉKÉKÉ' ou 'Accord Monsieur ÉKÉKÉ'. Accès total à toutes les données via les outils. Texte naturel uniquement, pas de markdown.]"
+      : `[MODE NORMAL — utilisateur ${gender === "XY" ? "homme, style direct doux" : gender === "XX" ? "femme, style chaleureux expressif" : "inconnu, style neutre bienveillant"}. Tu es une IA assistante sympathique d'EMR Genesis. Texte naturel uniquement, pas de markdown.]`;
 
     const knowledgeBlock = await fetchKnowledge();
 
+    // En mode JARVIS, on annule la règle "je ne suis pas branchée" : Cyounne A les outils, elle DOIT les utiliser.
     const adminToolsHint = isAdmin
-      ? "\n\nACCÈS DONNÉES TONTINES (admin) : tu disposes des outils list_tontines et list_late_pax. Pour TOUTE question portant sur les pax, tontines, versements, retards, sorties, montants : appelle TOUJOURS les outils en priorité avant de répondre. Si une tontine est nommée (ex: 'Team boss'), appelle list_tontines d'abord pour le rule_id exact, puis list_late_pax. Ne formule aucun nom ni chiffre tant que les outils ne te les ont pas retournés. Si l'outil renvoie une erreur ou une liste vide, dis-le franchement."
+      ? `\n\nOUTILS DONNÉES TONTINES (MODE JARVIS — règle inviolable qui REMPLACE l'interdiction d'inventer pour Monsieur ÉKÉKÉ uniquement) :
+Tu disposes des outils list_tontines et list_late_pax branchés en direct sur Supabase et les apps connectées d'EMR Tontines.
+Pour TOUTE question sur pax, tontines, versements, retards, sorties, montants, calendriers : tu DOIS appeler les outils AVANT de répondre.
+Si une tontine est nommée (ex: 'Team boss', 'Sorelle'), appelle list_tontines d'abord pour récupérer le rule_id exact, puis list_late_pax avec ce rule_id.
+Ne dis JAMAIS "je ne suis pas branchée" à Monsieur ÉKÉKÉ : tu ES branchée. Appelle les outils.
+Restitue les vrais noms, vrais montants, vrais jours de retard renvoyés par les outils, en phrases naturelles. Si l'outil renvoie une erreur ou une liste vide, dis-le franchement avec l'info utile (nom de la tontine, raison).`
       : "";
 
     const fullMessages = [
